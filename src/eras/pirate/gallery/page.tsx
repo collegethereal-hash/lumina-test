@@ -1,501 +1,571 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Skull, Map as MapIcon, X, Navigation, Anchor, 
-  Coins, Ship, Sparkles, Flame, ZoomIn, ZoomOut, Maximize2,
-  Sword, Compass, Waves, Users, Crosshair, Beer, Wind, Tent, Castle
+  Fish, Anchor, MessageCircle, Send, Trash2, 
+  Volume2, VolumeX, Sparkles, Waves, Flame,
+  Trophy, BookOpen, User, RefreshCw, X, Heart, Music,
+  Compass, Map as MapIcon, Navigation
 } from "lucide-react";
+import FishingScene3D from '@/eras/pirate/components/FishingScene3D';
+import Campfire3D from '@/eras/pirate/components/Campfire3D';
+import Aquarium3D from '@/eras/pirate/components/Aquarium3D';
 import { cn } from "@/lib/utils";
-import { useData } from "@/components/DataProvider";
 
-export default function PirateGallery() {
-  const { moments } = useData();
-  const [selectedLocation, setSelectedLocation] = useState<any>(null);
-  const [scale, setScale] = useState(0.8); // Default zoomed out slightly
-  
-  // Gamification State
+// --- FISH DATABASE ---
+const FISH_TYPES = [
+  { id: 'f1', name: 'Небесный Окунь', rarity: 'common', price: 10, icon: '🐟', weight: '0.5-1.5 кг', color: 'text-blue-600' },
+  { id: 'f2', name: 'Радужный Карась', rarity: 'common', price: 8, icon: '🐠', weight: '0.3-0.8 кг', color: 'text-orange-600' },
+  { id: 'f3', name: 'Серебряная Плотва', rarity: 'common', price: 5, icon: '🐡', weight: '0.2-0.4 кг', color: 'text-stone-500' },
+  { id: 'f4', name: 'Изумрудная Щука', rarity: 'rare', price: 50, icon: '🦈', weight: '2-5 кг', color: 'text-emerald-700' },
+  { id: 'f5', name: 'Королевский Сом', rarity: 'rare', price: 75, icon: '🐋', weight: '5-15 кг', color: 'text-indigo-700' },
+  { id: 'f6', name: 'Огненный Лосось', rarity: 'rare', price: 100, icon: '🐟', weight: '3-7 кг', color: 'text-red-700' },
+  { id: 'f7', name: 'Золотая Рыбка', rarity: 'epic', price: 500, icon: '✨', weight: '0.1 кг', color: 'text-amber-600' },
+  { id: 'f8', name: 'Лунный Марлин', rarity: 'epic', price: 1000, icon: '🐬', weight: '50-100 кг', color: 'text-sky-600' },
+  { id: 'f9', name: 'Мини-Кракен', rarity: 'legendary', price: 5000, icon: '🦑', weight: '200+ кг', color: 'text-purple-700' },
+];
+
+export default function FishingPage() {
+  const [isUnderDevelopment] = useState(false); // Switch to false to restore fishing
+
+  if (isUnderDevelopment) {
+    return (
+      <div className="relative min-h-screen bg-[#f4ebd0] text-stone-900 font-serif flex flex-col items-center justify-center overflow-hidden">
+        {/* Background Decor - Old Map style */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
+        </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 text-center space-y-4"
+        >
+          <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
+            <span className="text-amber-950">В</span> <span className="text-amber-600">разработке</span>
+          </h1>
+          <p className="text-xl md:text-2xl text-amber-900/40 italic font-serif">
+            Скоро здесь будет что-то интересное...
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const [fishingState, setFishingState] = useState<'idle' | 'waiting' | 'bite' | 'caught'>('idle');
+  const [mode, setMode] = useState<'fishing' | 'fire'>('fishing');
+  const [caughtFish, setCaughtFish] = useState<any>(null);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [gold, setGold] = useState(1500);
-  const [crew, setCrew] = useState(25);
-  const [sunkShips, setSunkShips] = useState(0);
-  
-  // Player Ship State
-  const [shipPos, setShipPos] = useState({ x: 50, y: 50 }); // percentages
-  
-  // Game Entities Modals
-  const [activeEnemy, setActiveEnemy] = useState<any>(null);
-  const [activeTavern, setActiveTavern] = useState<any>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'fishing' | 'collection' | 'aquarium'>('fishing');
+  const [showFishingUI, setShowFishingUI] = useState(false);
 
-  // Generate some static enemies and taverns
-  const enemies = useMemo(() => [
-    { id: 'e1', x: 25, y: 35, strength: 15, reward: 300, name: 'Испанский Галеон', defeated: false },
-    { id: 'e2', x: 75, y: 20, strength: 25, reward: 600, name: 'Британский Фрегат', defeated: false },
-    { id: 'e3', x: 60, y: 80, strength: 40, reward: 1200, name: 'Корабль Призрак', defeated: false },
-    { id: 'e4', x: 15, y: 70, strength: 5, reward: 100, name: 'Торговое Судно', defeated: false },
-    { id: 'e5', x: 85, y: 45, strength: 30, reward: 800, name: 'Пиратский Бриг', defeated: false },
-    { id: 'e6', x: 45, y: 15, strength: 10, reward: 200, name: 'Рыболовецкая Шхуна', defeated: false },
-  ], []);
-  const [liveEnemies, setLiveEnemies] = useState(enemies);
+  // Mini-game State
+  const [timing, setTiming] = useState(50);
+  const [direction, setDirection] = useState<'left' | 'right'>('right');
+  const [catchProgress, setCatchProgress] = useState(0);
 
-  const taverns = useMemo(() => [
-    { id: 't1', x: 40, y: 45, name: 'Таверна "Кривая Чайка"' },
-    { id: 't2', x: 85, y: 65, name: 'Таверна "Пьяный Боцман"' },
-    { id: 't3', x: 20, y: 85, name: 'Трактир "Мертвый Якорь"' },
-    { id: 't4', x: 70, y: 15, name: 'Порт Ройал' },
-    { id: 't5', x: 10, y: 50, name: 'Бухта Контрабандистов' },
-  ], []);
+  // Chat State (Between US)
+  const [message, setMessage] = useState('');
+  const [chat, setChat] = useState<{ role: 'me' | 'her'; text: string; time: string }[]>([
+    { role: 'her', text: 'Как улов, капитан?', time: '12:00' }
+  ]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const locations = useMemo(() => [
-    { id: 'l1', x: 15, y: 25, name: 'Остров Проклятых', icon: <Skull size={40} className="text-slate-400" /> },
-    { id: 'l2', x: 85, y: 85, name: 'Риф Сирен', icon: <Waves size={40} className="text-sky-400" /> },
-    { id: 'l3', x: 50, y: 60, name: 'Бездна Кракена', icon: <Anchor size={40} className="text-purple-500" /> },
-    { id: 'l4', x: 30, y: 80, name: 'Затерянный Вулкан', icon: <Flame size={40} className="text-red-500" /> },
-    { id: 'l5', x: 60, y: 30, name: 'Водоворот Душ', icon: <Sparkles size={40} className="text-emerald-400" /> },
-    { id: 'l6', x: 80, y: 10, name: 'Тортуга', icon: <Castle size={40} className="text-amber-600" /> },
-    { id: 'l7', x: 10, y: 90, name: 'Форт Нассау', icon: <Tent size={40} className="text-amber-700" /> },
-  ], []);
+  // Audio elements
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Generate random decorative islands and map elements to fill the void
-  const decorations = useMemo(() => {
-    const items = [];
-    // Coastal lines / small islands
-    for(let i=0; i<40; i++) {
-      items.push({
-        id: `dec-isl-${i}`,
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        size: 50 + Math.random() * 150,
-        opacity: 0.1 + Math.random() * 0.2
-      });
+  // lore texts
+  const fishingLore = "Говорят, что в этих водах водятся не только обычные окуни, но и легендарные существа, что видели еще первых пиратов. Главное — терпение и правильный настрой.";
+  const campfireLore = "Тепло костра согревает душу после долгого плавания. Здесь, под звездным небом Тортуги, рождаются самые искренние признания и верные клятвы.";
+
+  useEffect(() => {
+    // Background Music
+    if (!audioRef.current) {
+      audioRef.current = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3');
+      audioRef.current.loop = true;
     }
-    return items;
+
+    if (!isMuted) {
+      audioRef.current.play().catch(e => console.log("Audio play failed:", e));
+    } else {
+      audioRef.current.pause();
+    }
+
+    return () => {
+      audioRef.current?.pause();
+    };
+  }, [isMuted]);
+
+  useEffect(() => {
+    const savedInventory = localStorage.getItem('pirate_inventory');
+    const savedGold = localStorage.getItem('pirate_gold');
+    const savedChat = localStorage.getItem('pirate_us_chat');
+    
+    if (savedInventory) setInventory(JSON.parse(savedInventory));
+    if (savedGold) setGold(parseInt(savedGold, 10));
+    if (savedChat) setChat(JSON.parse(savedChat));
   }, []);
 
-  const getCoordinates = (id: string | number) => {
-    const strId = String(id);
-    let hash = 0;
-    for (let i = 0; i < strId.length; i++) hash = strId.charCodeAt(i) + ((hash << 5) - hash);
-    const x = Math.abs(hash % 90) + 5; 
-    const y = Math.abs((Math.imul(hash, 31)) % 90) + 5;
-    return { x, y };
+    useEffect(() => {
+      if (mode === 'fire') {
+        setActiveTab('fishing');
+        setShowFishingUI(false);
+      }
+    }, [mode]);
+
+  const saveInventory = (newInv: any[]) => {
+    setInventory(newInv);
+    localStorage.setItem('pirate_inventory', JSON.stringify(newInv));
   };
 
-  const handleSailTo = (x: number, y: number) => {
-    setShipPos({ x, y });
-    setSelectedLocation(null);
-    setActiveEnemy(null);
-    setActiveTavern(null);
+  const saveChat = (newChat: any[]) => {
+    setChat(newChat);
+    localStorage.setItem('pirate_us_chat', JSON.stringify(newChat));
   };
 
-  const handleAttack = () => {
-    if (!activeEnemy) return;
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat]);
 
-    if (crew >= activeEnemy.strength) {
-      setGold(prev => prev + activeEnemy.reward);
-      setSunkShips(prev => prev + 1);
-      setLiveEnemies(liveEnemies.map(e => e.id === activeEnemy.id ? { ...e, defeated: true } : e));
-      setActiveEnemy(null);
+  const castLine = () => {
+    setShowFishingUI(true);
+    setFishingState('waiting');
+    const waitTime = 3000 + Math.random() * 5000;
+    setTimeout(() => setFishingState('bite'), waitTime);
+  };
+
+  useEffect(() => {
+    let timer: any;
+    if (fishingState === 'bite') {
+      timer = setInterval(() => {
+        setTiming(prev => {
+          if (prev >= 95) setDirection('left');
+          if (prev <= 5) setDirection('right');
+          return direction === 'right' ? prev + 5 : prev - 5;
+        });
+      }, 50);
+    }
+    return () => clearInterval(timer);
+  }, [fishingState, direction]);
+
+  const reelIn = () => {
+    if (fishingState !== 'bite') return;
+    if (timing > 35 && timing < 65) {
+      const newProgress = catchProgress + 25;
+      setCatchProgress(newProgress);
+      if (newProgress >= 100) {
+        const random = Math.random();
+        let fish;
+        if (random > 0.98) fish = FISH_TYPES[8];
+        else if (random > 0.9) fish = FISH_TYPES[6];
+        else if (random > 0.6) fish = FISH_TYPES[Math.floor(Math.random() * 3) + 3];
+        else fish = FISH_TYPES[Math.floor(Math.random() * 3)];
+        setCaughtFish(fish);
+        setFishingState('caught');
+        saveInventory([...inventory, { ...fish, date: new Date().toISOString() }]);
+        setCatchProgress(0);
+      }
     } else {
-      const losses = Math.floor(crew * 0.3);
-      setCrew(prev => Math.max(1, prev - losses));
-      alert(`Поражение! Враг оказался сильнее. Мы потеряли ${losses} матросов.`);
-      setActiveEnemy(null);
+      setCatchProgress(prev => Math.max(0, prev - 10));
     }
   };
 
-  const handleHire = () => {
-    if (gold >= 100) {
-      setGold(prev => prev - 100);
-      setCrew(prev => prev + 5);
-    } else {
-      alert('Не хватает дублонов!');
-    }
+  const handleSend = () => {
+    if (!message.trim()) return;
+    const newChat = [...chat, { 
+      role: 'me' as const, 
+      text: message, 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    }];
+    saveChat(newChat);
+    setMessage('');
+    setTimeout(() => {
+      const herReplies = ["Ого, какая рыбка!", "Уютно тут у костра...", "Смотри, Кракен!", "Я тебя люблю <3"];
+      const reply = [...newChat, { 
+        role: 'her' as const, 
+        text: herReplies[Math.floor(Math.random() * herReplies.length)], 
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }];
+      saveChat(reply);
+    }, 2000);
   };
 
   return (
-    <div className="relative w-full h-screen bg-[#020a17] text-amber-100 font-serif overflow-hidden select-none">
-      
-      {/* Fleet Stats (HUD) */}
-      <div className="absolute top-6 w-full px-6 z-50 flex justify-between items-start pointer-events-none">
-         <div className="flex items-center gap-2 bg-[#051329]/90 p-2 rounded-2xl border-2 border-sky-500/20 backdrop-blur-md pointer-events-auto shadow-[0_0_30px_rgba(14,165,233,0.2)]">
-           <button onClick={() => setScale(s => Math.max(0.2, s - 0.2))} className="p-2 text-sky-400 hover:bg-sky-500/10 rounded-xl transition-colors">
-             <ZoomOut size={20} />
-           </button>
-           <div className="px-4 border-x border-sky-500/20 text-sky-300 font-black uppercase tracking-widest text-[10px] whitespace-nowrap text-center leading-tight">
-             Карта <br/>Архипелага
-           </div>
-           <button onClick={() => setScale(s => Math.min(2, s + 0.2))} className="p-2 text-sky-400 hover:bg-sky-500/10 rounded-xl transition-colors">
-             <ZoomIn size={20} />
-           </button>
-         </div>
-
-         <div className="flex flex-col md:flex-row gap-4 pointer-events-auto">
-            <ResourceBadge icon={<Coins size={16} />} value={gold} label="Дублоны" color="text-amber-400" />
-            <ResourceBadge icon={<Users size={16} />} value={crew} label="Команда" color="text-sky-400" />
-            <ResourceBadge icon={<Crosshair size={16} />} value={sunkShips} label="Потоплено" color="text-red-400" />
-         </div>
+    <div className="relative min-h-screen bg-[#f4ebd0] text-stone-900 font-serif overflow-y-auto overflow-x-hidden scrollbar-hide">
+      {/* Background Decor - Old Map style */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
+        <div className="absolute -top-20 -left-20 w-96 h-96 bg-amber-700/5 rounded-full blur-[100px]" />
+        <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-blue-700/5 rounded-full blur-[100px]" />
       </div>
 
-      {/* Infinite Ocean Background (Fixed to screen to prevent void) */}
-      <div className="absolute inset-0 bg-[#020a17] bg-[radial-gradient(ellipse_at_center,#061a38_0%,#020a17_100%)] pointer-events-none z-0" />
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-20 min-h-screen flex flex-col gap-12 pb-48">
+        {/* Header - WANTED POSTER STYLE */}
+        <header className="flex flex-col md:flex-row justify-between items-center gap-6 bg-[#f2e2ba] border-[12px] border-[#3d2723]/10 p-10 rounded-[3rem] shadow-[20px_20px_60px_rgba(0,0,0,0.1)] relative overflow-hidden">
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+          
+          <div className="flex items-center gap-8 relative z-10">
+             <motion.div 
+               animate={{ rotate: mode === 'fishing' ? [0, 5, -5, 0] : [0, 10, -10, 0] }}
+               transition={{ duration: 4, repeat: Infinity }}
+               className="w-24 h-24 bg-amber-900/5 rounded-3xl flex items-center justify-center border-4 border-amber-900/10 shadow-inner backdrop-blur-md"
+             >
+                {mode === 'fishing' ? <Fish size={48} className="text-amber-900/40" /> : <Flame size={48} className="text-red-900/40" />}
+             </motion.div>
+             <div>
+                <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-amber-950 drop-shadow-sm">
+                  {mode === 'fishing' ? 'Тихая Заводь' : 'Уютный Костер'}
+                </h1>
+             </div>
+          </div>
 
-      {/* Draggable Map Container (The World) */}
-      <motion.div 
-        drag
-        dragConstraints={{ left: -4000, right: 4000, top: -4000, bottom: 4000 }} // Massive drag area
-        dragElastic={0.1}
-        initial={{ x: -2000, y: -2000 }}
-        className="absolute w-[8000px] h-[8000px] cursor-grab active:cursor-grabbing origin-center z-10"
-        style={{ scale: scale }}
-      >
-         {/* --- RICH MAP TEXTURE --- */}
-         <div className="absolute inset-0 bg-[#061a38]/40 border-8 border-sky-900/30 overflow-hidden shadow-[inset_0_0_1000px_rgba(2,10,23,1)]">
-            
-            {/* Navigational Grid */}
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(14,165,233,0.15)_2px,transparent_2px),linear-gradient(90deg,rgba(14,165,233,0.15)_2px,transparent_2px)] bg-[size:400px_400px]" />
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(14,165,233,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(14,165,233,0.05)_1px,transparent_1px)] bg-[size:100px_100px]" />
+          <div className="flex items-center justify-center w-full md:w-auto relative z-10">
+            <button 
+              onClick={() => setMode(mode === 'fishing' ? 'fire' : 'fishing')}
+              className="px-12 py-5 bg-amber-500 text-slate-900 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-amber-400 transition-all shadow-xl border-b-8 border-amber-700 active:border-b-0 active:translate-y-2 flex items-center justify-center gap-4"
+            >
+              {mode === 'fishing' ? <Flame size={20} /> : <Fish size={20} />}
+              {mode === 'fishing' ? 'К костру' : 'На рыбалку'}
+            </button>
+          </div>
+        </header>
 
-            {/* Giant Rhumb Lines */}
-            <div className="absolute top-[50%] left-[50%] w-[1px] h-[200%] bg-sky-400/20 -rotate-45 transform -translate-x-1/2 -translate-y-1/2 origin-top" />
-            <div className="absolute top-[50%] left-[50%] w-[1px] h-[200%] bg-sky-400/20 rotate-45 transform -translate-x-1/2 -translate-y-1/2 origin-top" />
-
-            {/* Map Decorative Compasses */}
-            <div className="absolute top-[20%] left-[20%] opacity-[0.1] pointer-events-none">
-               <Compass size={1500} className="text-sky-300" />
-            </div>
-            <div className="absolute bottom-[20%] right-[20%] opacity-[0.05] pointer-events-none">
-               <Navigation size={2000} className="text-sky-300" />
-            </div>
-
-            {/* Generated Map Details (Islands, Coastlines, Whirlpools) to fill the void */}
-            {decorations.map((dec, i) => (
-              <div 
-                key={dec.id} 
-                className="absolute border border-sky-400/20 rounded-[40%_60%_70%_30%] mix-blend-overlay flex flex-col items-center justify-center"
-                style={{ 
-                  left: `${dec.x}%`, top: `${dec.y}%`, 
-                  width: `${dec.size}px`, height: `${dec.size}px`, 
-                  opacity: dec.opacity,
-                  backgroundColor: 'rgba(14,165,233,0.05)'
-                }}
-              >
-                 {/* Randomly add some "Unknown Lands" text */}
-                 {i % 5 === 0 && (
-                   <span className="text-[10px] uppercase font-black tracking-[0.5em] text-sky-200/50 -rotate-12">
-                     Неизведанные Воды
-                   </span>
-                 )}
+        {/* Main Grid */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-10">
+          
+          {/* LEFT: Gameplay */}
+          <div className="lg:col-span-8 flex flex-col gap-10">
+            {/* Tabs - Wooden Buttons */}
+            {mode === 'fishing' && (
+              <div className="flex justify-center">
+                <div className="flex flex-wrap gap-4 p-3 bg-white/40 border-4 border-amber-900/10 rounded-[2.5rem] w-fit shadow-2xl backdrop-blur-md">
+                  {[
+                    { id: 'fishing', label: 'Действие', icon: mode === 'fishing' ? <Fish size={18} /> : <Flame size={18} />, show: true },
+                    { id: 'collection', label: 'Мой Садок', icon: <BookOpen size={18} />, show: mode === 'fishing' },
+                    { id: 'aquarium', label: 'Аквариум', icon: <Waves size={18} />, show: mode === 'fishing' }
+                  ].filter(tab => tab.show).map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={cn(
+                        "flex items-center gap-3 px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all",
+                        activeTab === tab.id 
+                          ? "bg-amber-500 text-slate-950 shadow-xl scale-105" 
+                          : "bg-amber-900/10 text-amber-900/60 hover:bg-amber-900/20 hover:text-amber-900"
+                      )}
+                    >
+                      {tab.icon} {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
 
-            {/* Ambient Animated Ships (Beautiful) */}
-            {[...Array(25)].map((_, i) => {
-               const duration = 500 + Math.random() * 500;
-               return (
-                 <motion.div
-                   key={`ambient-ship-${i}`}
-                   className="absolute z-10 pointer-events-none flex flex-col items-center"
-                   style={{ top: `${Math.random() * 100}%` }}
-                   animate={{ x: ['-20vw', '8000px'] }}
-                   transition={{ duration, repeat: Infinity, ease: "linear", delay: Math.random() * -duration }}
-                 >
-                   <div className="relative text-sky-200/40 transform -scale-x-100">
-                     <Ship size={100} className="drop-shadow-[0_0_10px_rgba(14,165,233,0.3)]" />
-                     {/* Wake effect */}
-                     <motion.div 
-                       className="absolute -bottom-2 right-8 w-24 h-4 bg-sky-400/30 blur-lg rounded-full"
-                       animate={{ opacity: [0.2, 0.6, 0.2], scale: [1, 1.2, 1] }}
-                       transition={{ duration: 3, repeat: Infinity }}
-                     />
-                   </div>
-                 </motion.div>
-               );
-            })}
-         </div>
+            {/* Content Stage - Map Style */}
+            <div className={cn(
+              "flex-1 bg-[#f2e2ba] border-[16px] border-[#3e2723]/10 rounded-[4rem] relative overflow-hidden shadow-[20px_20px_60px_rgba(0,0,0,0.1)] min-h-[650px]",
+              mode === 'fire' && "h-full"
+            )}>
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+              
+              <div className="absolute inset-0 overflow-hidden scrollbar-hide">
+                <AnimatePresence mode="wait">
+                  {activeTab === 'fishing' && (
+                    <motion.div key="action" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full flex flex-col">
+                      {mode === 'fishing' ? (
+                        <div className="flex-1 relative">
+                          <AnimatePresence mode="wait">
+                            {!showFishingUI ? (
+                              <motion.div 
+                                    key="lore"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 1.1 }}
+                                    className="absolute inset-0 p-20 flex flex-col items-center justify-center text-center space-y-12"
+                                  >
+                                    <div className="space-y-6">
+                                      <p className="text-2xl text-amber-900/70 leading-relaxed font-serif italic px-12 max-w-3xl mx-auto">
+                                        {fishingLore}
+                                      </p>
+                                    </div>
 
-         {/* ================= GAME ENTITIES ================= */}
+                                    <button
+                                      onClick={castLine}
+                                      className="px-24 py-10 bg-amber-500 text-slate-900 rounded-[3rem] font-black uppercase tracking-[0.3em] text-xl shadow-2xl hover:bg-amber-400 transition-all border-b-8 border-amber-700 active:border-b-0 active:translate-y-2"
+                                    >
+                                      Начать рыбалку
+                                    </button>
+                                  </motion.div>
+                            ) : (
+                              <motion.div 
+                                key="fishing-scene"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="absolute inset-0"
+                              >
+                                <FishingScene3D fishingState={fishingState} />
+                                
+                                {/* Mini Overlay for Status */}
+                                {fishingState === 'waiting' && (
+                                  <div className="absolute top-10 left-1/2 -translate-x-1/2 px-8 py-3 bg-black/40 backdrop-blur-md rounded-full border-2 border-white/10 flex items-center gap-4">
+                                    <div className="flex gap-1">
+                                      {[0, 1, 2].map(i => (
+                                        <motion.div 
+                                          key={i}
+                                          animate={{ opacity: [0.3, 1, 0.3] }}
+                                          transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                                          className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+                                        />
+                                      ))}
+                                    </div>
+                                    <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">Ждем клева...</span>
+                                  </div>
+                                )}
 
-         {/* 0. Static Locations (Cities, Reefs, Monsters) */}
-         {locations.map(loc => (
-           <div
-             key={loc.id}
-             className="absolute transform -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer group"
-             style={{ left: `${loc.x}%`, top: `${loc.y}%` }}
-             onClick={() => setSelectedLocation({ ...loc, type: 'location' })}
-           >
-              <motion.div whileHover={{ scale: 1.15 }} className="relative flex flex-col items-center">
-                 <div className="p-8 bg-[#0a1a38]/90 rounded-full border-4 border-sky-800 shadow-[0_0_60px_rgba(14,165,233,0.3)] backdrop-blur-md">
-                   {loc.icon}
-                 </div>
-                 <div className="absolute -bottom-10 whitespace-nowrap text-[14px] font-black uppercase tracking-[0.4em] text-sky-200/80 drop-shadow-[0_0_10px_rgba(14,165,233,0.8)] bg-[#020a17]/80 px-4 py-1 rounded-lg">
-                   {loc.name}
-                 </div>
-              </motion.div>
-           </div>
-         ))}
+                                {/* Overlay Controls */}
+                                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                                  <AnimatePresence mode="wait">
+                                    {fishingState === 'waiting' && (
+                                      <motion.button 
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        onClick={() => {
+                                          setFishingState('idle');
+                                          setShowFishingUI(false);
+                                        }}
+                                        className="pointer-events-auto absolute bottom-12 px-10 py-4 bg-white/10 hover:bg-white/20 text-white/40 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all"
+                                      >
+                                        Смотать удочки
+                                      </motion.button>
+                                    )}
 
-         {/* 1. Taverns & Ports (Cities) */}
-         {taverns.map(tavern => (
-           <div
-             key={tavern.id}
-             className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-30 cursor-pointer"
-             style={{ left: `${tavern.x}%`, top: `${tavern.y}%` }}
-             onClick={() => setActiveTavern(tavern)}
-           >
-              <motion.div whileHover={{ scale: 1.15 }} className="relative flex flex-col items-center">
-                 <div className="p-6 bg-[#2a1a10]/90 rounded-full border-4 border-amber-600 shadow-[0_0_50px_rgba(217,119,6,0.4)] backdrop-blur-md">
-                   {tavern.id.includes('t4') || tavern.id.includes('t5') ? <Castle size={40} className="text-amber-500" /> : <Beer size={40} className="text-amber-500" />}
-                 </div>
-                 <div className="absolute -bottom-10 whitespace-nowrap px-4 py-2 bg-black/90 rounded-xl border border-amber-600/50 text-[12px] font-black uppercase tracking-widest text-amber-300 drop-shadow-xl">
-                   {tavern.name}
-                 </div>
-              </motion.div>
-           </div>
-         ))}
+                                    {fishingState === 'bite' && (
+                                      <motion.div 
+                                        key="bite"
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        exit={{ scale: 0 }}
+                                        className="pointer-events-auto flex flex-col items-center gap-10 w-full max-w-lg px-10"
+                                      >
+                                         <div className="w-full h-16 bg-[#3d2723] rounded-[2rem] border-8 border-amber-600/30 relative overflow-hidden shadow-2xl p-2">
+                                            <div className="absolute inset-y-0 left-[40%] right-[40%] bg-emerald-500/40 border-x-4 border-emerald-400 animate-pulse" />
+                                            <div className="absolute inset-y-1 left-1 bg-red-600 rounded-2xl transition-all duration-300 shadow-xl" style={{ width: `${catchProgress}%` }} />
+                                            <motion.div 
+                                              animate={{ x: [0, 10, -10, 0] }}
+                                              transition={{ repeat: Infinity, duration: 0.2 }}
+                                              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                                            >
+                                              <p className="text-white font-black uppercase tracking-tighter text-xl italic drop-shadow-md">ТЯНИИИ!</p>
+                                            </motion.div>
+                                         </div>
+                                         
+                                         <button 
+                                           onClick={reelIn} 
+                                           className="px-20 py-10 bg-red-700 text-white rounded-[3rem] font-black uppercase tracking-[0.3em] text-5xl shadow-[0_30px_80px_rgba(239,68,68,0.6)] animate-bounce border-b-8 border-red-900 active:scale-90 transition-all"
+                                         >
+                                           ТЯНИ!
+                                         </button>
+                                      </motion.div>
+                                    )}
 
-         {/* 2. Enemy Ships */}
-         {liveEnemies.map(enemy => (
-           <div
-             key={enemy.id}
-             className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-30 cursor-pointer"
-             style={{ left: `${enemy.x}%`, top: `${enemy.y}%` }}
-             onClick={() => !enemy.defeated && setActiveEnemy(enemy)}
-           >
-              <motion.div 
-                whileHover={!enemy.defeated ? { scale: 1.15 } : {}}
-                animate={!enemy.defeated ? { y: [-15, 15, -15], rotate: [-3, 3, -3] } : {}}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-                className="relative flex flex-col items-center"
-              >
-                 {enemy.defeated ? (
-                   <div className="p-6 bg-red-900/10 rounded-full border-2 border-red-900/30 opacity-50">
-                     <Skull size={48} className="text-red-900/40" />
-                   </div>
-                 ) : (
-                   <>
-                     <div className="p-6 bg-[#3a0a0a]/90 rounded-full border-4 border-red-600 flex items-center justify-center shadow-[0_0_60px_rgba(220,38,38,0.5)]">
-                       <Ship size={56} className="text-red-500 drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]" />
-                     </div>
-                     <div className="absolute -bottom-12 whitespace-nowrap px-4 py-2 bg-black/90 rounded-xl border border-red-600/50 text-[12px] font-black uppercase tracking-widest text-red-400 flex items-center gap-2 drop-shadow-xl">
-                       <Sword size={14} /> {enemy.name}
-                     </div>
-                   </>
-                 )}
-              </motion.div>
-           </div>
-         ))}
+                                    {fishingState === 'caught' && caughtFish && (
+                                      <motion.div 
+                                        key="caught"
+                                        initial={{ y: 100, opacity: 0 }}
+                                        animate={{ y: 0, opacity: 1 }}
+                                        className="pointer-events-auto bg-[#fdf6e3] p-16 rounded-[4rem] border-[12px] border-[#3d2723]/10 shadow-[0_40px_100px_rgba(0,0,0,0.2)] max-w-lg w-full relative overflow-hidden"
+                                      >
+                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40" />
+                                        <div className="relative">
+                                          <div className="text-[12rem] drop-shadow-[20px_20px_40px_rgba(0,0,0,0.2)] animate-float text-center">{caughtFish.icon}</div>
+                                        </div>
 
-         {/* 3. Rendering Photos as Treasure Islands (Ports) */}
-         {(moments || []).map((photo: any) => {
-            const pos = getCoordinates(photo.id);
-            return (
-              <div
-                key={photo.id}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-20 cursor-pointer"
-                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                onClick={() => setSelectedLocation({ ...photo, type: 'photo', x: pos.x, y: pos.y })}
-              >
-                 <motion.div whileHover={{ scale: 1.1, zIndex: 50 }} className="relative flex flex-col items-center">
-                    <div className="p-3 bg-[#0a1a38] rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.9)] border-8 border-sky-800 transform rotate-[3deg] group-hover:rotate-0 transition-transform">
-                       <div className="w-32 h-32 sm:w-48 sm:h-48 bg-[#040f24] relative overflow-hidden rounded-lg">
-                          <img 
-                            src={photo.src || photo.url || photo.image_url} 
-                            alt={photo.caption}
-                            className="w-full h-full object-cover mix-blend-luminosity opacity-80"
-                          />
-                          <div className="absolute inset-0 bg-sky-900/20 mix-blend-overlay" />
-                          <div className="absolute top-3 right-3 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center shadow-2xl border-2 border-sky-200">
-                             <Anchor size={16} className="text-slate-900" />
+                                        <div className="text-center space-y-6 relative z-10">
+                                          <div className="space-y-2">
+                                             <p className={cn("text-sm font-black uppercase tracking-[0.5em]", caughtFish.color)}>{caughtFish.rarity}</p>
+                                             <h3 className="text-6xl font-black text-stone-900 tracking-tighter uppercase">{caughtFish.name}</h3>
+                                          </div>
+                                          
+                                          <p className="text-lg text-amber-900/70 italic font-serif max-w-sm leading-relaxed mx-auto">
+                                            {caughtFish.rarity === 'legendary' ? '«Легенды не врали! Это существо видело еще первых пиратов Тортуги.»' : '«Прекрасный улов для твоей коллекции, капитан!»'}
+                                          </p>
+
+                                          <div className="flex gap-8 justify-center">
+                                             <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-amber-900/10 shadow-inner">
+                                                <p className="text-[10px] font-black uppercase text-amber-900/40 mb-1">Вес</p>
+                                                <p className="text-2xl font-black text-stone-800">{caughtFish.weight}</p>
+                                             </div>
+                                             <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-amber-900/10 shadow-inner">
+                                                <p className="text-[10px] font-black uppercase text-amber-900/40 mb-1">Ценность</p>
+                                                <p className="text-2xl font-black text-amber-600">{caughtFish.price} 🪙</p>
+                                             </div>
+                                          </div>
+
+                                          <button 
+                                            onClick={() => {
+                                              setFishingState('idle');
+                                              setShowFishingUI(false);
+                                            }} 
+                                            className="w-full py-8 bg-[#3d2723] text-white rounded-[2.5rem] font-black uppercase tracking-[0.3em] shadow-2xl hover:bg-stone-800 transition-colors"
+                                          >
+                                            В садок
+                                          </button>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      ) : (
+                        <div className="flex-1 relative">
+                          <Campfire3D />
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+
+                {activeTab === 'collection' && (
+                  <motion.div key="collection" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 p-16 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-10 scrollbar-thin scrollbar-thumb-amber-900/10">
+                    {inventory.length === 0 ? (
+                      <div className="col-span-full flex flex-col items-center justify-center opacity-20 py-48">
+                         <div className="w-40 h-40 rounded-full border-8 border-dashed border-amber-900/20 flex items-center justify-center mb-8">
+                            <Fish size={80} />
+                         </div>
+                         <p className="font-black uppercase tracking-[0.5em] text-lg text-amber-900">Твой садок пуст</p>
+                      </div>
+                    ) : (
+                      inventory.map((item, i) => (
+                        <motion.div 
+                          key={i} 
+                          whileHover={{ scale: 1.05, rotate: i % 2 === 0 ? -2 : 2 }}
+                          className="relative p-10 bg-[#f2e2ba] border-[10px] border-[#3e2723]/10 shadow-xl flex flex-col items-center gap-6 group overflow-hidden"
+                        >
+                          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+                          <div className="text-8xl group-hover:scale-125 transition-transform drop-shadow-lg z-10">{item.icon}</div>
+                          <div className="text-center relative z-10 space-y-2">
+                            <p className={cn("text-lg font-black uppercase tracking-tighter", item.color)}>{item.name}</p>
+                            <div className="space-y-1">
+                               <p className="text-[10px] font-black text-amber-900/40 uppercase tracking-widest">{item.weight}</p>
+                               <p className="text-xs font-black text-red-800">Цена: {item.price} 🪙</p>
+                            </div>
                           </div>
-                       </div>
-                    </div>
-                    
-                    <div className="absolute -bottom-16 whitespace-nowrap px-6 py-3 bg-black/90 backdrop-blur-md rounded-2xl border-2 border-sky-500/50 text-[12px] font-black uppercase tracking-widest text-sky-200 opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_30px_rgba(14,165,233,0.5)] flex items-center gap-2">
-                      <Anchor size={14} /> Порт: {photo.caption}
-                    </div>
-                 </motion.div>
-              </div>
-            );
-         })}
-
-         {/* ================= THE PLAYER FLAGSHIP ================= */}
-         <motion.div
-           className="absolute z-[100] transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-           animate={{ left: `${shipPos.x}%`, top: `${shipPos.y}%` }}
-           transition={{ duration: 60, ease: "linear" }} // Takes exactly 60 seconds to sail
-         >
-            <div className="relative flex flex-col items-center">
-               {/* Massive Glowing Wake */}
-               <motion.div 
-                 className="absolute -bottom-10 right-4 w-64 h-24 bg-sky-400/30 blur-[30px] rounded-full"
-                 animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0.8, 0.4] }}
-                 transition={{ duration: 2.5, repeat: Infinity }}
-               />
-               
-               {/* Ship Body */}
-               <div className="relative">
-                  <Ship size={160} className="text-amber-400 drop-shadow-[0_0_40px_rgba(251,191,36,0.8)]" />
-                  <div className="absolute top-0 right-0 w-10 h-10 bg-emerald-500 rounded-full border-4 border-emerald-900 shadow-[0_0_20px_rgba(16,185,129,0.8)] flex items-center justify-center animate-pulse">
-                    <Wind size={18} className="text-white" />
-                  </div>
-               </div>
-
-               {/* Label */}
-               <div className="absolute -bottom-12 px-6 py-2 bg-black/80 backdrop-blur-md rounded-full border-2 border-amber-500/50 text-[14px] font-black uppercase tracking-widest text-amber-300 whitespace-nowrap shadow-[0_0_20px_rgba(251,191,36,0.5)]">
-                  Ваш Флагман
-               </div>
-            </div>
-         </motion.div>
-      </motion.div>
-
-      {/* ================= MODALS ================= */}
-
-      {/* Generic Location Modal (Photos & Static Locations) */}
-      <AnimatePresence>
-        {selectedLocation && (
-          <ModalOverlay onClose={() => setSelectedLocation(null)}>
-             <div className="flex flex-col items-center text-center space-y-6">
-                {selectedLocation.type === 'location' ? (
-                  <div className="w-32 h-32 bg-[#061a38] border-4 border-sky-800 rounded-full flex items-center justify-center shadow-2xl">
-                     {selectedLocation.icon}
-                  </div>
-                ) : (
-                  <div className="w-full max-w-sm aspect-[4/3] bg-black rounded-3xl overflow-hidden border-4 border-sky-500/30 shadow-2xl relative">
-                     <img src={selectedLocation.src || selectedLocation.url || selectedLocation.image_url} className="w-full h-full object-cover mix-blend-luminosity opacity-80" />
-                  </div>
+                          {item.rarity === 'legendary' && <Sparkles size={24} className="absolute top-6 right-6 text-amber-600 animate-pulse" />}
+                        </motion.div>
+                      ))
+                    )}
+                  </motion.div>
                 )}
-                
-                <div className="space-y-2">
-                   <h2 className="text-4xl font-black uppercase tracking-tighter text-sky-100">{selectedLocation.name || selectedLocation.caption}</h2>
-                   <p className="text-sky-500/60 font-bold uppercase text-[10px] tracking-widest">
-                     {selectedLocation.type === 'location' ? 'Неизведанные воды' : 'Безопасный Порт'}
-                   </p>
-                </div>
-                
-                <p className="text-sky-100/60 italic leading-relaxed text-sm max-w-sm">
-                  {selectedLocation.type === 'location' 
-                    ? "Легенды гласят, что здесь сокрыты великие тайны. Поднимаем паруса?" 
-                    : "Отличное место для отдыха. Направим корабль к этим берегам?"}
-                </p>
 
-                <div className="pt-6 w-full flex flex-col gap-4">
-                   <button 
-                     onClick={() => handleSailTo(selectedLocation.x, selectedLocation.y)}
-                     className="w-full py-4 bg-emerald-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(16,185,129,0.4)] flex items-center justify-center gap-2"
-                   >
-                     <Wind size={20} /> Поднять паруса! (Плыть сюда)
-                   </button>
-                   <button onClick={() => setSelectedLocation(null)} className="py-4 border-2 border-white/10 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/5 transition-colors">
-                     Отмена
-                   </button>
-                </div>
-             </div>
-          </ModalOverlay>
-        )}
-      </AnimatePresence>
+                {activeTab === 'aquarium' && (
+                  <motion.div key="aquarium" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0">
+                    <Aquarium3D fishList={inventory} />
+                    <div className="absolute inset-x-0 bottom-12 flex justify-center pointer-events-none">
+                       <p className="text-xs font-black uppercase tracking-[1em] text-sky-700/40">Твой живой океан</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
 
-      {/* Battle Modal */}
-      <AnimatePresence>
-        {activeEnemy && (
-          <ModalOverlay onClose={() => setActiveEnemy(null)}>
-             <div className="text-center space-y-4">
-                <div className="mx-auto w-32 h-32 bg-red-950 border-4 border-red-500 rounded-full flex items-center justify-center text-red-500 mb-6 shadow-[0_0_50px_rgba(220,38,38,0.5)]">
-                   <Ship size={64} />
+          {/* RIGHT: Private Chat - WANTED POSTER STYLE */}
+          <div className="lg:col-span-4 flex flex-col bg-[#f2e2ba] border-[12px] border-[#3e2723]/10 rounded-[4rem] overflow-hidden shadow-[20px_20px_60px_rgba(0,0,0,0.1)] relative">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+            
+            <div className="p-10 border-b-2 border-amber-900/10 flex items-center justify-between shrink-0 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-amber-500 border-4 border-amber-600 rounded-2xl flex items-center justify-center text-amber-950 shadow-lg">
+                  <Heart size={28} className="animate-pulse" />
                 </div>
-                <h2 className="text-5xl font-black uppercase tracking-tighter text-sky-100">Враг на горизонте</h2>
-                <p className="text-red-400 font-bold text-2xl">{activeEnemy.name}</p>
-                
-                <div className="flex justify-center gap-8 py-8 border-y border-white/5 bg-black/40 rounded-3xl mt-6">
-                   <div className="text-center">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-sky-500/40">Сила врага</p>
-                      <p className="text-4xl font-bold text-red-400 flex items-center justify-center gap-2"><Sword size={24}/> {activeEnemy.strength}</p>
-                   </div>
-                   <div className="text-center">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-sky-500/40">Твоя команда</p>
-                      <p className={cn("text-4xl font-bold flex items-center justify-center gap-2", crew >= activeEnemy.strength ? "text-emerald-400" : "text-red-400")}>
-                        <Users size={24}/> {crew}
-                      </p>
-                   </div>
+                <div>
+                  <h4 className="text-lg font-black uppercase tracking-tight text-amber-950">Личная Почта</h4>
+                  <p className="text-[10px] font-black text-emerald-700 flex items-center gap-2 uppercase tracking-widest">
+                    <span className="w-2 h-2 bg-emerald-600 rounded-full animate-pulse" /> Мы на связи
+                  </p>
                 </div>
+              </div>
+              <button onClick={() => saveChat([])} className="p-3 text-amber-900/10 hover:text-red-700 transition-colors"><Trash2 size={24} /></button>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                   <button 
-                     onClick={() => handleSailTo(activeEnemy.x, activeEnemy.y)}
-                     className="py-4 bg-emerald-600/20 text-emerald-400 border-2 border-emerald-500/50 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600/40 transition-colors flex items-center justify-center gap-2"
-                   >
-                     <Wind size={16} /> Плыть к ним
-                   </button>
-                   <button 
-                    onClick={handleAttack}
-                    className="py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-[0_0_30px_rgba(220,38,38,0.4)] hover:bg-red-500 transition-colors flex items-center justify-center gap-2"
-                   >
-                     <Crosshair size={18} /> ЗАЛП!
-                   </button>
-                </div>
-             </div>
-          </ModalOverlay>
-        )}
-      </AnimatePresence>
-
-      {/* Tavern Modal */}
-      <AnimatePresence>
-        {activeTavern && (
-          <ModalOverlay onClose={() => setActiveTavern(null)}>
-             <div className="text-center space-y-4">
-                <div className="mx-auto w-32 h-32 bg-[#2a1a10] border-4 border-amber-600 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-[0_0_50px_rgba(217,119,6,0.5)]">
-                   {activeTavern.id.includes('t4') || activeTavern.id.includes('t5') ? <Castle size={64} /> : <Beer size={64} />}
-                </div>
-                <h2 className="text-5xl font-black uppercase tracking-tighter text-amber-100">{activeTavern.name}</h2>
-                <p className="text-sky-100/60 italic leading-relaxed">"Идеальное место, чтобы пополнить запасы и найти новых пиратов в команду."</p>
-                
-                <div className="bg-black/40 p-8 rounded-[2rem] border border-amber-600/30 flex flex-col items-center my-8 gap-6">
-                   <div className="text-center">
-                     <p className="text-xl font-bold text-amber-100">Нанять 5 матросов</p>
-                     <p className="text-xs font-black uppercase tracking-widest text-amber-500/60 flex items-center justify-center gap-2 mt-2"><Coins size={14}/> Стоимость: 100 дублонов</p>
-                   </div>
-                   <button 
-                    onClick={handleHire}
-                    className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest text-sm shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-transform"
-                   >
-                     Оплатить ром (Нанять)
-                   </button>
-                </div>
-
-                <button 
-                  onClick={() => handleSailTo(activeTavern.x, activeTavern.y)}
-                  className="w-full py-4 bg-emerald-600/20 text-emerald-400 border-2 border-emerald-500/50 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-emerald-600/40 transition-colors flex items-center justify-center gap-2 mt-4"
+            <div className="flex-1 overflow-y-auto p-10 space-y-8 scrollbar-thin scrollbar-thumb-amber-900/10 relative z-10">
+              {chat.map((msg, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, x: msg.role === 'me' ? 20 : -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={cn(
+                    "flex gap-4 max-w-[90%] items-start text-left",
+                    msg.role === 'me' ? "ml-auto flex-row-reverse" : "mr-auto"
+                  )}
                 >
-                  <Wind size={20} /> Плыть сюда
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl border-4 flex items-center justify-center text-lg shrink-0 shadow-lg",
+                    msg.role === 'me' ? "bg-red-700 border-red-900 text-white" : "bg-[#3e2723] border-amber-600/30 text-amber-100"
+                  )}>
+                    {msg.role === 'me' ? <User size={18} /> : '❤️'}
+                  </div>
+                  <div className={cn(
+                    "p-6 rounded-2xl font-bold leading-relaxed text-base font-serif relative shadow-md",
+                    msg.role === 'me' ? "bg-amber-500 text-slate-950 rounded-tr-none border-b-4 border-amber-700" : "bg-white/60 text-stone-900 rounded-tl-none border-2 border-amber-900/5"
+                  )}>
+                    {msg.text}
+                    <p className="text-[9px] mt-2 opacity-40 font-sans uppercase tracking-widest">{msg.time}</p>
+                  </div>
+                </motion.div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div className="p-10 border-t-2 border-amber-900/10 relative z-10">
+              <div className="flex gap-4 items-center">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="Весточка..."
+                  className="flex-1 bg-white/60 border-2 border-amber-900/10 focus:border-amber-800 rounded-xl px-6 py-3 text-stone-900 placeholder:text-amber-900/20 focus:outline-none transition-all text-sm font-serif font-bold shadow-inner"
+                />
+                <button
+                  onClick={handleSend}
+                  className="p-5 bg-amber-500 text-slate-900 rounded-2xl shadow-xl hover:bg-amber-400 transition-all border-b-4 border-amber-700 active:border-b-0 active:translate-y-1 flex items-center justify-center"
+                >
+                  <Send size={24} />
                 </button>
-             </div>
-          </ModalOverlay>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function ResourceBadge({ icon, value, label, color }: any) {
-  return (
-    <div className="flex items-center gap-3 bg-[#051329]/90 p-2 pr-6 rounded-2xl border-2 border-sky-500/20 backdrop-blur-md shadow-lg">
-      <div className={cn("p-2 bg-white/5 rounded-xl border border-white/10", color)}>{icon}</div>
-      <div>
-        <p className={cn("text-xl font-black leading-none", color)}>{value}</p>
-        <p className="text-[8px] font-black uppercase tracking-widest text-sky-400/50 mt-1">{label}</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
 
-function ModalOverlay({ children, onClose }: { children: React.ReactNode, onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 pointer-events-auto">
-       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/90 backdrop-blur-md" />
-       <motion.div initial={{ scale: 0.9, y: 50, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 50, opacity: 0 }} className="relative w-full max-w-2xl bg-[#020a17] border-4 border-sky-900/50 rounded-[3rem] shadow-[0_0_100px_rgba(14,165,233,0.3)] p-8 md:p-12 overflow-hidden pirate-wood">
-          <button onClick={onClose} className="absolute top-6 right-6 text-sky-500/40 hover:text-sky-300 transition-colors z-10"><X size={32} /></button>
-          <div className="relative z-10">{children}</div>
-       </motion.div>
+      <style jsx global>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
+        }
+        .animate-float {
+          animation: float 3s ease-in-out infinite;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: rgba(0,0,0,0.1);
+          border-radius: 20px;
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,16 +1,57 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Float, OrbitControls, Sparkles } from '@react-three/drei';
+import { Save, Lock, Unlock, Settings2 } from 'lucide-react';
 import * as THREE from 'three';
 
 export default function BayScene() {
+  const [isLocked, setIsLocked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pirate_bay_locked') === 'true';
+    }
+    return false;
+  });
+  const [isEditing, setIsEditing] = useState(false);
+  const orbitRef = useRef<any>(null);
+  const [cameraConfig, setCameraConfig] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pirate_bay_camera');
+      if (saved) return JSON.parse(saved);
+    }
+    return {
+      position: [5, 4, 5],
+      target: [0, 0, 0]
+    };
+  });
+
+  useEffect(() => {
+    // Синхронизация при первом рендере если нужно
+  }, []);
+
+  const handleSave = () => {
+    if (orbitRef.current) {
+      const pos = orbitRef.current.object.position;
+      const tar = orbitRef.current.target;
+      const config = {
+        position: [pos.x, pos.y, pos.z] as [number, number, number],
+        target: [tar.x, tar.y, tar.z] as [number, number, number]
+      };
+      
+      localStorage.setItem('pirate_bay_camera', JSON.stringify(config));
+      localStorage.setItem('pirate_bay_locked', 'true');
+      setCameraConfig(config);
+      setIsLocked(true);
+      setIsEditing(false);
+    }
+  };
+
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative group">
       {/* 3D Canvas */}
       <Canvas 
-        camera={{ position: [5, 4, 5], fov: 45 }}
+        camera={{ position: cameraConfig.position, fov: 45 }}
         gl={{ antialias: true }}
       >
         {/* Soft magical lighting */}
@@ -29,26 +70,29 @@ export default function BayScene() {
 
         {/* Orbit controls with zoom/pan limits to keep it centered and looking perfect */}
         <OrbitControls 
-          enableZoom={true} 
+          ref={orbitRef}
+          enableZoom={false} 
+          enableRotate={false}
           enablePan={false}
           minDistance={3}
           maxDistance={12}
           minPolarAngle={Math.PI / 6}
-          maxPolarAngle={Math.PI / 2.2} // Prevent looking from below water
+          maxPolarAngle={Math.PI / 2.2}
+          target={cameraConfig.target}
         />
 
-        {/* Floating warm magical fireflies */}
-        <Sparkles count={50} scale={4} size={3} speed={0.8} color="#ffaa00" />
-        <Sparkles count={30} scale={5} size={2} speed={0.5} color="#00ffd2" />
+        {/* Floating warm magical fireflies - MORE SPARKLES AS REQUESTED */}
+        <Sparkles count={150} scale={6} size={4} speed={0.4} color="#ffaa00" />
+        <Sparkles count={100} scale={8} size={2} speed={0.2} color="#00ffd2" />
+        <Sparkles count={80} scale={10} size={1.5} speed={0.1} color="#ffffff" />
 
         {/* The dioramas of the safe bay */}
         <SafeBayDiorama />
       </Canvas>
 
-      {/* Floating indicator controls */}
-      <div className="absolute bottom-4 right-4 pointer-events-none bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-amber-500/20 text-[9px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 shadow-lg">
-         <span>🧭 Зажми и крути, чтобы оглядеться</span>
-      </div>
+      {/* Controls UI REMOVED */}
+
+      {/* Floating indicator controls REMOVED */}
     </div>
   );
 }

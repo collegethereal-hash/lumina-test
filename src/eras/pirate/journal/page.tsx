@@ -11,8 +11,10 @@ import { cn } from "@/lib/utils";
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/components/DataProvider';
 
+import { Skeleton } from '@/components/Skeleton';
+
 export default function PirateJournal() {
-  const { currentUser, whispers, refreshWhispers } = useData();
+  const { currentUser, whispers, refreshWhispers, isLoading, isWhispersLoading } = useData();
   const [newWhisper, setNewWhisper] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -25,6 +27,7 @@ export default function PirateJournal() {
       await supabase.from('whisper_history').insert([{
         content: newWhisper,
         sender: currentUser,
+        author: currentUser, // Добавлено обязательное поле
         receiver: currentUser === 'Grinch' ? 'Cindy' : 'Grinch'
       }]);
 
@@ -42,14 +45,14 @@ export default function PirateJournal() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#020617] text-amber-100 pb-32 font-serif overflow-hidden">
+    <div className="relative min-h-screen bg-[#020617] text-amber-100 font-serif overflow-hidden">
       {/* Background Decor */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-10" />
         <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-b from-transparent via-blue-950/10 to-black/40" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 pt-16 space-y-12">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 pt-16 pb-40 space-y-12">
         <header className="text-center space-y-4">
           <motion.div
             initial={{ scale: 0 }}
@@ -99,41 +102,54 @@ export default function PirateJournal() {
            </div>
 
            <div className="space-y-6">
-              {whispers.map((whisper) => (
-                <motion.div
-                  key={whisper.id}
-                  initial={{ opacity: 0, x: whisper.sender === currentUser ? 20 : -20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  className={cn(
-                    "flex flex-col max-w-[85%] space-y-2",
-                    whisper.sender === currentUser ? "ml-auto items-end" : "mr-auto items-start"
-                  )}
-                >
-                  <div className={cn(
-                    "relative p-6 rounded-[2rem] border-2 shadow-xl",
-                    whisper.sender === currentUser 
-                      ? "bg-amber-400/10 border-amber-400/30 text-amber-100" 
-                      : "bg-slate-900/60 border-amber-500/10 text-amber-200/80"
-                  )}>
-                    <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] pointer-events-none" />
-                    <p className="text-lg italic leading-relaxed relative z-10">"{whisper.content}"</p>
-                    
-                    <div className="absolute -bottom-1 -right-1 opacity-10">
-                       {whisper.sender === 'Grinch' ? <Trees size={40} /> : <Moon size={40} />}
-                    </div>
+              {(isLoading || isWhispersLoading) ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div 
+                    key={`skeleton-whisper-${i}`}
+                    className={cn(
+                      "flex flex-col max-w-[85%] space-y-2",
+                      i % 2 === 0 ? "ml-auto items-end" : "mr-auto items-start"
+                    )}
+                  >
+                    <Skeleton className="w-64 h-24 rounded-[2rem] bg-amber-500/5 border-2 border-amber-500/10" />
+                    <Skeleton className="w-24 h-3 opacity-20" />
                   </div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 px-4">
-                    {new Date(whisper.created_at).toLocaleDateString()} • {whisper.sender === 'Grinch' ? 'Гринч' : 'Синди'}
-                  </span>
-                </motion.div>
-              ))}
-
-              {whispers.length === 0 && (
+                ))
+              ) : whispers.length > 0 ? (
+                whispers.map((whisper) => (
+                  <motion.div
+                    key={whisper.id}
+                    initial={{ opacity: 0, x: whisper.sender === currentUser ? 20 : -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    className={cn(
+                      "flex flex-col max-w-[85%] space-y-2",
+                      whisper.sender === currentUser ? "ml-auto items-end" : "mr-auto items-start"
+                    )}
+                  >
+                    <div className={cn(
+                      "relative p-6 rounded-[2rem] border-2 shadow-xl",
+                      whisper.sender === currentUser 
+                        ? "bg-amber-400/10 border-amber-400/30 text-amber-100" 
+                        : "bg-slate-900/60 border-amber-500/10 text-amber-200/80"
+                    )}>
+                      <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] pointer-events-none" />
+                      <p className="text-lg italic leading-relaxed relative z-10">"{whisper.content}"</p>
+                      
+                      <div className="absolute -bottom-1 -right-1 opacity-10">
+                         {whisper.sender === 'Grinch' ? <Trees size={40} /> : <Moon size={40} />}
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 px-4">
+                      {new Date(whisper.created_at).toLocaleDateString()} • {whisper.sender === 'Grinch' ? 'Гринч' : 'Синди'}
+                    </span>
+                  </motion.div>
+                ))
+              ) : (!isLoading && !isWhispersLoading && whispers.length === 0) ? (
                 <div className="text-center py-20 opacity-20 italic">
                   <p className="text-2xl">Океан спокоен... Писем пока нет.</p>
                 </div>
-              )}
+              ) : null}
            </div>
         </div>
       </div>

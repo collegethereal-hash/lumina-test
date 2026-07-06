@@ -1,67 +1,74 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Anchor, Map, Sword, Scroll, Coins, Users, Compass, Bomb } from 'lucide-react';
+import { Anchor, Fish, Music, Scroll, Coins, Users, Compass, Info } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/', icon: Anchor, label: 'Бухта' },
-  { href: '/gallery', icon: Map, label: 'Карты' },
-  { href: '/lair', icon: Bomb, label: 'Логово' },
+  { href: '/gallery', icon: Fish, label: 'Рыбалка' },
+  { href: '/music', icon: Music, label: 'Песни' },
   { href: '/bucket-list', icon: Scroll, label: 'Кодекс' },
-  { href: '/stats', icon: Coins, label: 'Казна' },
-  { href: '/profile', icon: Users, label: 'Команда' },
+  { href: '/stats', icon: Compass, label: 'Острова' },
+  { href: '/profile', icon: Users, label: 'Каюта' },
 ];
 
 export const PirateNavbar = () => {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Удаляем блокировку для страницы статистики, чтобы навигация была видна
+  // if (pathname === '/stats') return null;
 
   return (
-    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-2xl">
+    <nav className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] w-[95%] max-w-2xl pointer-events-auto">
       <motion.div 
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="pirate-wood px-2 sm:px-4 md:px-10 py-4 rounded-3xl flex items-center justify-between shadow-2xl relative overflow-hidden"
+        className="bg-[#f2e2ba]/80 backdrop-blur-xl border-[6px] border-[#3e2723]/10 px-2 sm:px-4 md:px-8 py-3 rounded-[2.5rem] flex items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.15)] relative overflow-hidden pointer-events-auto isolate"
       >
-        {/* Wood grain texture effect via SVG or CSS could go here */}
-        <div className="absolute inset-0 pointer-events-none opacity-[0.1] bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]" />
+        {/* Paper texture effect */}
+        <div className="absolute inset-0 pointer-events-none opacity-40 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
         
-        {/* Decorative corner nails */}
-        <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-zinc-600 shadow-inner" />
-        <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-zinc-600 shadow-inner" />
-        <div className="absolute bottom-2 left-2 w-2 h-2 rounded-full bg-zinc-600 shadow-inner" />
-        <div className="absolute bottom-2 right-2 w-2 h-2 rounded-full bg-zinc-600 shadow-inner" />
-
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
           
           return (
-            <Link key={item.href} href={item.href} className="relative group">
+            <button
+              key={item.href}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(item.href);
+              }}
+              className="relative group cursor-pointer pointer-events-auto z-[10000] px-2"
+            >
               <motion.div
-                whileHover={{ y: -4, rotate: [0, -5, 5, 0] }}
+                whileHover={{ y: -4 }}
                 whileTap={{ scale: 0.9 }}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 transition-all duration-300",
-                  isActive ? "text-amber-400 scale-110" : "text-amber-100/50 hover:text-amber-400"
+                  "flex flex-col items-center gap-1 transition-all duration-300",
+                  isActive ? "text-amber-600 scale-105" : "text-amber-900/40 hover:text-amber-700"
                 )}
               >
                 <div className={cn(
-                  "p-2 rounded-xl transition-all duration-500",
-                  isActive ? "bg-amber-400/20 shadow-[0_0_15px_rgba(251,191,36,0.3)] border border-amber-400/30" : "bg-transparent"
+                  "p-3 rounded-2xl transition-all duration-500 relative",
+                  isActive ? "bg-amber-600 text-white shadow-lg shadow-amber-900/20" : "bg-transparent"
                 )}>
-                  <Icon size={isActive ? 26 : 22} strokeWidth={isActive ? 2.5 : 2} />
+                  <Icon size={20} strokeWidth={isActive ? 3 : 2} />
                 </div>
                 <span className={cn(
-                  "text-[9px] font-black uppercase tracking-[0.2em]",
-                  isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  "text-[8px] font-black uppercase tracking-[0.25em] transition-all duration-300",
+                  isActive ? "opacity-100 mt-1" : "opacity-0 group-hover:opacity-100"
                 )}>
                   {item.label}
                 </span>
               </motion.div>
-            </Link>
+            </button>
           );
         })}
       </motion.div>

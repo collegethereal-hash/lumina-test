@@ -18,11 +18,12 @@ export function ParrotKoko({ open, onClose, showTrigger = true }: ParrotKokoProp
   const [internalOpen, setInternalOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [chat, setChat] = useState<{ role: 'user' | 'koko'; text: string }[]>([
-    { role: 'koko', text: 'Каррр! Я Коко, твой личный пиратский психолог. Какая буря настигла твоё сердце сегодня? 🦜' }
+    { role: 'koko', text: 'Привет! Я Коко, тут, чтобы выслушать и помочь разобраться. Что у тебя на сердце?' }
   ]);
   const [isTyping, setIsTyping] = useState(false);
 
   const isOpen = open !== undefined ? open : internalOpen;
+
   const handleClose = () => {
     if (onClose) onClose();
     else setInternalOpen(false);
@@ -32,10 +33,12 @@ export function ParrotKoko({ open, onClose, showTrigger = true }: ParrotKokoProp
     if (!message.trim()) return;
     const userMsg = message;
     setMessage('');
-    setChat(prev => [...prev, { role: 'user', text: userMsg }]);
+    const updatedChatWithUser = [...chat, { role: 'user' as const, text: userMsg }];
+    setChat(updatedChatWithUser);
     setIsTyping(true);
-    const response = await chatWithKoko(userMsg);
-    setChat(prev => [...prev, { role: 'koko', text: response }]);
+    
+    const response = await chatWithKoko(userMsg, undefined, 'shared', undefined, updatedChatWithUser as any);
+    setChat(prev => [...prev, { role: 'koko' as const, text: response }]);
     setIsTyping(false);
   };
 
@@ -93,7 +96,9 @@ export function ParrotKoko({ open, onClose, showTrigger = true }: ParrotKokoProp
                   <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-3xl">🦜</div>
                   <div>
                     <h3 className="text-xl font-bold text-amber-100 leading-none">Коко</h3>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/50 mt-0.5">Мудрый психолог · Пиратская Тортуга</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/50 mt-0.5">
+                      ИИ-терапевт
+                    </p>
                   </div>
                 </div>
                 <button onClick={handleClose} className="text-amber-500/30 hover:text-amber-500 transition-colors p-2">
@@ -120,9 +125,9 @@ export function ParrotKoko({ open, onClose, showTrigger = true }: ParrotKokoProp
                 ))}
                 {isTyping && (
                   <div className="bg-[#1a100a] text-amber-100 p-4 rounded-2xl rounded-tl-none border border-amber-500/10 w-16 flex gap-1 justify-center">
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" />
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse [animation-delay:0.2s]" />
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse [animation-delay:0.4s]" />
                   </div>
                 )}
               </div>

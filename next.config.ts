@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Оптимизация Turbopack и сборки
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'framer-motion', 'recharts'],
+  },
   images: {
     remotePatterns: [
       {
@@ -10,6 +14,10 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'oczgmziyucrcxhkzmipx.supabase.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'bqpmlyaqipxbydgfdiut.supabase.co',
       },
     ],
   },

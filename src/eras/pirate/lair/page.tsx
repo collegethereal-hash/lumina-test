@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { 
   Skull, Anchor, Sword, Crosshair, Bomb, 
   Shield, Users, Flame, Target, Trophy, 
@@ -43,9 +44,10 @@ const getOffset = (i: number) => {
 };
 
 export default function LairPage() {
+  const router = useRouter();
   const [battleLog, setBattleLog] = useState<string[]>([
-    "Капитан! Вражеский галеон подошел на расстояние выстрела!",
-    "Прикажите начать абордаж или открыть огонь!"
+    "Подготовка к бою...",
+    "Ожидание приказа капитана!"
   ]);
   
   // Crew distribution for Player
@@ -62,6 +64,43 @@ export default function LairPage() {
     deck: 20
   });
 
+  const [enemyInfo, setEnemyInfo] = useState<any>(null);
+
+  useEffect(() => {
+    const savedEnemy = localStorage.getItem('current_battle_enemy');
+    if (savedEnemy) {
+      const enemy = JSON.parse(savedEnemy);
+      setEnemyInfo(enemy);
+      
+      // Scale enemy crew based on strength (strength is total, split it into zones)
+      const total = enemy.strength || 60;
+      const base = Math.floor(total / 3);
+      setEnemyCrew({
+        helm: base,
+        cannons: base,
+        deck: total - (base * 2)
+      });
+      
+      addLog(`🏴‍☠️ Мы атакуем корабль: ${enemy.name}!`);
+      
+      setBattleLog([
+        `Капитан! Корабль "${enemy.name}" подошел на расстояние выстрела!`,
+        "Прикажите начать абордаж или открыть огонь!"
+      ]);
+    }
+
+    const savedPlayerCrew = localStorage.getItem('pirate_crew');
+    if (savedPlayerCrew) {
+      const total = parseInt(savedPlayerCrew, 10);
+      const base = Math.floor(total / 3);
+      setPlayerCrew({
+        helm: base,
+        cannons: base,
+        deck: total - (base * 2)
+      });
+    }
+  }, []);
+
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [isAttacking, setIsAttacking] = useState(false);
   const [battlePhase, setBattlePhase] = useState<'idle' | 'gathering' | 'moving_to_bridge' | 'fighting' | 'returning'>('idle');
@@ -74,6 +113,10 @@ export default function LairPage() {
     enemyInitial: number;
     playerLosses: number;
     enemyLosses: number;
+    enemyId?: string;
+    reward?: number;
+    capturedCrew?: number;
+    goldEarned?: number;
   } | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
 
@@ -201,21 +244,35 @@ export default function LairPage() {
              
              const playerSurvivors = players.length;
              const enemySurvivors = enemies.length;
-             const winner = playerSurvivors > enemySurvivors ? 'player' : (enemySurvivors > playerSurvivors ? 'enemy' : 'draw');
-             
-             setBattleResult({
-                winner,
-                playerInitial: initialCrewRef.current.player,
-                enemyInitial: initialCrewRef.current.enemy,
-                playerLosses: initialCrewRef.current.player - playerSurvivors,
-                enemyLosses: initialCrewRef.current.enemy - enemySurvivors,
-             });
+             const winner: 'player' | 'enemy' | 'draw' = playerSurvivors > enemySurvivors ? 'player' : (enemySurvivors > playerSurvivors ? 'enemy' : 'draw');
+             const capturedCrew = winner === 'player' ? Math.floor(enemySurvivors / 2) : 0;
+             const goldEarned = winner === 'player' ? (enemyInfo?.reward || 500) : 0;
 
+             const battleResultData = {
+               winner,
+               enemyId: enemyInfo?.id,
+               reward: goldEarned,
+               capturedCrew: capturedCrew,
+               playerLosses: initialCrewRef.current.player - playerSurvivors,
+               enemyLosses: initialCrewRef.current.enemy - enemySurvivors,
+               playerInitial: initialCrewRef.current.player,
+               enemyInitial: initialCrewRef.current.enemy,
+               goldEarned: goldEarned
+             };
+
+             // Save results immediately
+             localStorage.setItem('last_battle_result', JSON.stringify(battleResultData));
+             localStorage.setItem('pirate_crew', (playerSurvivors + capturedCrew).toString());
+
+             setBattleResult(battleResultData);
+             
              setTimeout(() => {
                 setBattlePhase('returning');
-                const winnerStr = players.length > 0 ? "Мы захватили судно!" : (enemies.length > 0 ? "Враг отбил атаку!" : "Ничья!");
+                const winnerStr = winner === 'player' ? "Мы захватили судно!" : (winner === 'enemy' ? "Враг отбил атаку!" : "Ничья!");
                 logMsg(`🏴‍☠️ Бой окончен. ${winnerStr}`);
-             }, 0);
+                setShowResultModal(true);
+             }, 1000);
+
              return next.filter(f => !f.isDead);
           }
 
@@ -253,39 +310,46 @@ export default function LairPage() {
 
     if (battlePhase === 'returning') {
       const t = setTimeout(() => {
-        setActiveFighters(prev => {
-          const aliveP = prev.filter(f => f.side === 'player');
-          const aliveE = prev.filter(f => f.side === 'enemy');
-          
-          const newPlayerCrew = { helm: 0, cannons: 0, deck: 0 };
-          aliveP.forEach(f => {
-             if (f.zoneY === 15) newPlayerCrew.helm++;
-             else if (f.zoneY === 45) newPlayerCrew.cannons++;
-             else newPlayerCrew.deck++;
-          });
-
-          const newEnemyCrew = { helm: 0, cannons: 0, deck: 0 };
-          aliveE.forEach(f => {
-             if (f.zoneY === 15) newEnemyCrew.helm++;
-             else if (f.zoneY === 45) newEnemyCrew.cannons++;
-             else newEnemyCrew.deck++;
-          });
-          
-          setPlayerCrew(newPlayerCrew);
-          setEnemyCrew(newEnemyCrew);
-          
-          return [];
+        const aliveP = activeFighters.filter(f => f.side === 'player');
+        const aliveE = activeFighters.filter(f => f.side === 'enemy');
+        
+        const newPlayerCrew = { helm: 0, cannons: 0, deck: 0 };
+        aliveP.forEach(f => {
+           if (f.zoneY === 15) newPlayerCrew.helm++;
+           else if (f.zoneY === 45) newPlayerCrew.cannons++;
+           else newPlayerCrew.deck++;
         });
+
+        const newEnemyCrew = { helm: 0, cannons: 0, deck: 0 };
+        aliveE.forEach(f => {
+           if (f.zoneY === 15) newEnemyCrew.helm++;
+           else if (f.zoneY === 45) newEnemyCrew.cannons++;
+           else newEnemyCrew.deck++;
+        });
+        
+        setPlayerCrew(newPlayerCrew);
+        setEnemyCrew(newEnemyCrew);
+        setActiveFighters([]);
+        
         setBattlePhase('idle');
         setIsAttacking(false);
-        setShowResultModal(true);
-        logMsg("⚓ Выжившие вернулись на свои посты.");
+        
+        // Modal is already shown in the setInterval logic
+        // But we keep the automatic return logic here
+        const returnTimer = setTimeout(() => {
+          router.push('/gallery');
+        }, 5000);
+        
+        return () => clearTimeout(returnTimer);
       }, 8000); // Возвращаются очень медленно
       return () => clearTimeout(t);
     }
-  }, [battlePhase]);
+  }, [battlePhase, enemyInfo, activeFighters, router]);
 
   const resetBattle = () => {
+    const savedEnemy = localStorage.getItem('current_battle_enemy');
+    const enemyName = savedEnemy ? JSON.parse(savedEnemy).name : "Вражеский галеон";
+    
     setPlayerCrew({ helm: 16, cannons: 17, deck: 17 });
     setEnemyCrew({ helm: 20, cannons: 20, deck: 20 });
     setBattleResult(null);
@@ -294,7 +358,7 @@ export default function LairPage() {
     setIsAttacking(false);
     setActiveFighters([]);
     setBattleLog([
-      "Капитан! Вражеский галеон подошел на расстояние выстрела!",
+      `Капитан! Корабль "${enemyName}" подошел на расстояние выстрела!`,
       "Прикажите начать абордаж или открыть огонь!"
     ]);
   };
@@ -322,7 +386,7 @@ export default function LairPage() {
       <div className="absolute top-[-100px] left-[-100px] w-[500px] h-[500px] bg-cyan-600/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-100px] right-[-100px] w-[600px] h-[600px] bg-red-600/20 rounded-full blur-[100px] pointer-events-none" />
       
-      <div className="relative z-10 max-w-7xl mx-auto space-y-8">
+      <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-40">
          
          {/* Header */}
          <div className="flex justify-between items-center border-b-2 border-amber-500/30 pb-4">
@@ -660,6 +724,22 @@ export default function LairPage() {
                      <span className="w-16 font-bold text-red-500 text-center">-{battleResult.enemyLosses}</span>
                   </div>
 
+                  {(battleResult as any).capturedCrew > 0 && (
+                    <div className="flex justify-between items-center text-emerald-400 pt-2 border-t border-amber-500/5">
+                       <span className="flex items-center gap-1.5 font-black uppercase text-[10px]"><Users size={12} /> Взято в плен:</span>
+                       <span className="w-16 font-bold text-center">+{(battleResult as any).capturedCrew}</span>
+                       <span className="w-16" />
+                    </div>
+                  )}
+
+                  {(battleResult as any).goldEarned > 0 && (
+                    <div className="flex justify-between items-center text-amber-400">
+                       <span className="flex items-center gap-1.5 font-black uppercase text-[10px]"><Trophy size={12} /> Награбленное золото:</span>
+                       <span className="w-16 font-bold text-center">+{(battleResult as any).goldEarned}</span>
+                       <span className="w-16" />
+                    </div>
+                  )}
+
                   {/* Visual ratio bar */}
                   <div className="pt-2 border-t border-amber-500/5">
                      <div className="flex justify-between text-[10px] text-amber-500/40 mb-1 uppercase font-black">
@@ -682,27 +762,20 @@ export default function LairPage() {
                </div>
 
                {/* Buttons */}
-               <div className="flex gap-3">
+               <div className="space-y-4">
                  <button
-                   onClick={() => setShowResultModal(false)}
-                   className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/50 rounded-xl text-xs font-black uppercase text-zinc-400 tracking-wider transition-all"
-                 >
-                   Закрыть
-                 </button>
-                 <button
-                   onClick={resetBattle}
+                   onClick={() => router.push('/gallery')}
                    className={cn(
-                     "flex-[1.5] py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.03] shadow-md flex items-center justify-center gap-1.5 text-black",
-                     battleResult.winner === 'player'
-                       ? "bg-gradient-to-r from-amber-400 to-amber-500 hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
-                       : battleResult.winner === 'enemy'
-                         ? "bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)] border border-red-400/20"
-                         : "bg-gradient-to-r from-zinc-300 to-zinc-400 hover:shadow-[0_0_15px_rgba(228,228,231,0.4)]"
+                     "w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all hover:scale-[1.03] shadow-lg flex items-center justify-center gap-2 text-black",
+                     battleResult.winner === 'player' ? "bg-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.3)]" : "bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
                    )}
                  >
-                   <RefreshCw size={14} className="animate-spin-slow" />
-                   Новая битва
+                   {battleResult.winner === 'player' ? <Anchor size={16}/> : <RefreshCw size={16}/>}
+                   Вернуться на Карту
                  </button>
+                 <p className="text-[9px] font-black uppercase text-amber-500/40 tracking-[0.2em] animate-pulse">
+                    Автоматический переход через 5 секунд...
+                 </p>
                </div>
              </motion.div>
           </div>

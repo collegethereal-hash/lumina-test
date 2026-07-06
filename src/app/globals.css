@@ -16,19 +16,31 @@
 }
 
 .era-pirate {
-  --background: #020617; /* Deep Navy */
-  --foreground: #fef3c7; /* Amber/Parchment */
-  --talia-lavender: #0c4a6e; /* Deep Ocean */
-  --talia-peach: #78350f; /* Mahogany */
-  --talia-sand: #020617;
-  --era-accent: #fbbf24; /* Gold */
+  --background: #1a1510; /* Lighter warm brown instead of almost black */
+  --foreground: #fef3c7;
+  --talia-lavender: #0c4a6e;
+  --talia-peach: #78350f;
+  --talia-sand: #1a1510;
+  --era-accent: #fbbf24;
   
-  --wood-dark: #2d1a12;
-  --wood-light: #4d2f1e;
+  --wood-dark: #3e2718;
+  --wood-light: #5d3f2e;
   --ocean-blue: #0ea5e9;
-  --gold-glow: rgba(251, 191, 36, 0.2);
+  --gold-glow: rgba(251, 191, 36, 0.4); /* Stronger glow */
 }
 
+.garland-light {
+  width: 12px; /* Bigger */
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 15px 4px currentColor; /* Stronger shadow/glow */
+  animation: glow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { opacity: 0.7; filter: brightness(1); transform: scale(0.9); }
+  to { opacity: 1; filter: brightness(2.5); transform: scale(1.1); }
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -48,18 +60,30 @@
   50% { transform: translateY(-10px); }
 }
 
-html, body {
+html {
   max-width: 100vw;
   overflow-x: hidden;
   position: relative;
+  margin: 0;
+  padding: 0;
+  background: #f4ebd0;
 }
 
 body {
-  background: var(--background);
+  background: #f4ebd0;
   color: var(--foreground);
   font-family: 'Inter', sans-serif;
   min-height: 100vh;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .glass {

@@ -3,497 +3,523 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Users, Skull, Anchor, Sword, Scroll, 
-  Compass, Coins, Heart, 
-  Ship, Wind, X, Flame, Target, Trophy, Crown, Eye, Crosshair, Shield, CheckCircle, Info, Beer, Wrench, History
+  Users, Coins, Sword, 
+  Dices, Volume2, VolumeX,
+  ChevronLeft, Info, Trash2,
+  MessageSquare, Skull, Zap,
+  Map as MapIcon, X, Music, Waves,
+  Beer, Trophy, Target,
+  Compass, LayoutGrid, Ticket, Anchor, Shield, Scroll,
+  Gift, Landmark, Flame, Sparkles, Gavel
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
-import { useData } from '@/components/DataProvider';
+import { useEra } from "@/context/EraContext";
 
-export default function PirateProfile() {
-  const { currentUser } = useData();
-  const [showShipDetails, setShowShipDetails] = useState(false);
-  
-  // Local Stats from Store/Gameplay
-  const [gold, setGold] = useState(0);
-  const [crew, setCrew] = useState(0);
-  const [inventory, setInventory] = useState<string[]>([]);
-  const [sunkShips, setSunkShips] = useState(0);
-  const [shipHealth, setShipHealth] = useState(45); // e.g. 45% damaged
+// Import components
+import { StatCard } from './components/StatCard';
+import { PirateChat } from './components/PirateChat';
+import { GiftSystem } from './components/GiftSystem';
+import { TreasureHuntGame } from './games/TreasureHunt';
+import { TruthOrDareGame } from './games/TruthOrDare';
+import { SunkenShipLotteryGame } from './games/SunkenShipLottery';
+import { FortDefenseGame } from './games/FortDefense';
+import { PirateEmpireGame } from './games/PirateEmpire';
+import { TortugaSlotsGame } from './games/TortugaSlots';
+import { CrashShipGame } from './games/CrashShip';
+import { BlackjackGame } from './games/Blackjack';
 
-  const [activeSlot, setActiveSlot] = useState<string | null>(null);
+// --- TYPES ---
+type GameType = 'treasure_hunt' | 'truth_or_dare' | 'lottery' | 'fort_defense' | 'monopoly' | 'slots' | 'crash' | 'blackjack' | 'none';
+type GameMode = 'ai' | 'local';
+type PlayerId = 'me' | 'her';
+type SidebarTab = 'stats' | 'chat';
 
-  const [equippedParts, setEquippedParts] = useState({
-    hull: 'h1',
-    sails: 's1',
-    cannons: 'c1',
-    figurehead: 'f1'
+const GAME_RULES: Record<string, { title: string, rules: string[] }> = {
+  treasure_hunt: {
+    title: "Охота за Золотом",
+    rules: [
+      "Выбери количество бомб перед началом игры (3, 5, 10 или 15).",
+      "Чем больше бомб, тем выше множитель выигрыша!",
+      "Нашел мину — игра окончена, текущий улов сгорает.",
+      "После проигрыша ты увидишь, где были спрятаны остальные мины.",
+      "Можешь забрать накопленное золото в любой момент кнопкой 'Забрать'."
+    ]
+  },
+  truth_or_dare: {
+    title: "Правда или Дело",
+    rules: [
+      "Старая пиратская традиция честности.",
+      "Выбери 'Правду' — и ответь на каверзный вопрос.",
+      "Выбери 'Дело' — и выполни безумное задание.",
+      "Идеально для игры вдвоем за одной кружкой рома."
+    ]
+  },
+  lottery: {
+    title: "Лотерея Корабля",
+    rules: [
+      "Покупай билет за 200 золотых.",
+      "Розыгрыш происходит автоматически в конце дня.",
+      "Чем больше билетов, тем выше шанс на джекпот.",
+      "Выигрыш зачисляется сразу после объявления номера."
+    ]
+  },
+  fort_defense: {
+    title: "Защита Форта",
+    rules: [
+      "Отражай волны нападающих пиратов.",
+      "Кликай по врагам, чтобы стрелять из пушек.",
+      "Не дай врагам добраться до стен форта.",
+      "За каждого поверженного врага ты получаешь золото."
+    ]
+  },
+  monopoly: {
+    title: "Мои Владения",
+    rules: [
+      "Твоя личная коллекция активов в Архипелаге.",
+      "Покупай уникальные Земли, Замки и Корабли за золото.",
+      "Наводи на карточку, чтобы увидеть детальные характеристики и цену.",
+      "Купленные активы навсегда остаются в твоем распоряжении.",
+      "Собери полную коллекцию редчайших объектов Карибского моря!"
+    ]
+  },
+  slots: {
+    title: "Слоты Тортуги",
+    rules: [
+      "Крути барабаны в надежде на джекпот.",
+      "Три одинаковых символа дают максимальный выигрыш.",
+      "Два одинаковых символа возвращают ставку с бонусом.",
+      "Якорь (x2), Ром (x5), Череп (x10), Сундук (x50)!"
+    ]
+  },
+  crash: {
+    title: "Крэш-Корабль",
+    rules: [
+      "Сделай ставку и наблюдай за ростом множителя.",
+      "Множитель растет, пока корабль плывет.",
+      "Успей нажать 'Прыгнуть!', пока Кракен не утащил корабль.",
+      "Если корабль 'крэшнется' до твоего прыжка — ставка сгорит."
+    ]
+  },
+  blackjack: {
+    title: "Двадцать Одно",
+    rules: [
+      "Цель игры — набрать 21 очко или близко к этому, но не больше.",
+      "Если набрал больше 21 — ты проиграл.",
+      "Дилер (ИИ) останавливается на 17 очках.",
+      "Туз здесь всегда дает 11 очков (упрощенные правила)."
+    ]
+  }
+};
+
+export default function PirateGamesPage() {
+  const { setIsUIHidden } = useEra();
+  const [activeGame, setActiveGame] = useState<GameType>('none');
+  const [gameMode, setGameMode] = useState<GameMode>('ai');
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('stats');
+  const [gold, setGold] = useState(10000);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [showGiftModal, setShowGiftModal] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [stats, setStats] = useState<Record<PlayerId, { wins: number, losses: number }>>({
+    me: { wins: 0, losses: 0 },
+    her: { wins: 0, losses: 0 }
   });
 
-  const PARTS_DB: Record<string, any[]> = {
-    hull: [
-      { id: 'h1', name: 'Сгнившие доски', stat: 'Броня: 10', desc: 'Базовый каркас.', pros: 'Низкий вес', cons: 'Легко пробивается', icon: <Anchor size={20}/> },
-      { id: 'h2', name: 'Железное Дерево', stat: 'Броня: 80', desc: 'Защитит от ядер.', pros: 'Непробиваемость', cons: 'Очень тяжелое', icon: <Shield size={20}/> }
-    ],
-    sails: [
-      { id: 's1', name: 'Штормовая парусина', stat: 'Скорость: 30', desc: 'Медленно, но верно.', pros: 'Надежность', cons: 'Слабая тяга', icon: <Wind size={20}/> },
-      { id: 's2', name: 'Косые паруса', stat: 'Скорость: 90', desc: 'Ловят любой бриз.', pros: 'Высокая маневренность', cons: 'Легко рвутся', icon: <Wind size={20}/> }
-    ],
-    cannons: [
-      { id: 'c1', name: 'Старые пушки', stat: 'Огневая мощь: 15', desc: 'Часто дают осечку.', pros: 'Дешевизна', cons: 'Малый радиус', icon: <Flame size={20}/> },
-      { id: 'c2', name: 'Бронзовые Фальконеты', stat: 'Огневая мощь: 95', desc: 'Разнесут форт в щепки.', pros: 'Ужасающий урон', cons: 'Долгая перезарядка', icon: <Target size={20}/> }
-    ],
-    figurehead: [
-      { id: 'f1', name: 'Русалка', stat: 'Харизма: 20', desc: 'Поднимает настроение.', pros: 'Удача в бою', cons: 'Отвлекает матросов', icon: <Eye size={20}/> },
-      { id: 'f2', name: 'Золотой Лев', stat: 'Устрашение: 100', desc: 'Внушает ужас врагам.', pros: 'Враги сдаются сами', cons: 'Привлекает пиратов', icon: <Crown size={20}/> }
-    ]
-  };
-
-  const currentHull = PARTS_DB.hull.find(p => p.id === equippedParts.hull);
-  const currentSails = PARTS_DB.sails.find(p => p.id === equippedParts.sails);
-  const currentCannons = PARTS_DB.cannons.find(p => p.id === equippedParts.cannons);
-  const currentFigurehead = PARTS_DB.figurehead.find(p => p.id === equippedParts.figurehead);
-
-  const handleRepair = () => {
-    if (gold >= 100 && shipHealth < 100) {
-      setGold(prev => {
-        const newGold = prev - 100;
-        localStorage.setItem('pirate_gold', newGold.toString());
-        return newGold;
-      });
-      setShipHealth(100);
-    }
+  const clearStats = () => {
+    const emptyStats = {
+      me: { wins: 0, losses: 0 },
+      her: { wins: 0, losses: 0 }
+    };
+    setStats(emptyStats);
+    localStorage.setItem('pirate_game_stats_v2', JSON.stringify(emptyStats));
   };
 
   useEffect(() => {
     const savedGold = localStorage.getItem('pirate_gold');
-    const savedCrew = localStorage.getItem('pirate_crew');
-    const savedInv = localStorage.getItem('pirate_inventory');
-    const savedSunk = localStorage.getItem('pirate_sunk_ships');
-    
-    if (savedGold) setGold(parseInt(savedGold, 10));
-    if (savedCrew) setCrew(parseInt(savedCrew, 10));
-    if (savedInv) setInventory(JSON.parse(savedInv));
-    if (savedSunk) setSunkShips(parseInt(savedSunk, 10));
-    else setSunkShips(Math.floor(Math.random() * 20) + 5); 
+    if (savedGold) {
+      setGold(parseInt(savedGold));
+    } else {
+      // Начальный капитал, если в localStorage еще ничего нет
+      const initialGold = 10000;
+      setGold(initialGold);
+      localStorage.setItem('pirate_gold', initialGold.toString());
+    }
+
+    const savedStats = localStorage.getItem('pirate_game_stats_v2');
+    if (savedStats) setStats(JSON.parse(savedStats));
   }, []);
 
-  // Determine Ship based on inventory
-  const getFlagship = () => {
-    if (inventory.includes('s4')) return { 
-      name: 'Летучий Голландец', desc: 'Корабль призраков. Неуязвим для ядер.', icon: <Skull size={80} className="text-teal-400 drop-shadow-[0_0_20px_rgba(45,212,191,0.5)]" />, 
-      stats: { speed: 100, armor: 100, cannons: 100, cargo: 20 },
-      modules: { hull: 'Проклятое Дерево', sails: 'Рваные тени', figurehead: 'Жнец Душ' },
-      blueprint: 'Секретные записи Ост-Индской компании гласят, что этот корабль может погружаться под воду и плыть против ветра. На его борту нет живых матросов, только те, кто обменял свою душу на вечность.'
-    };
-    if (inventory.includes('s3')) return { 
-      name: 'Испанский Галеон', desc: 'Огромный трюм и непробиваемая броня.', icon: <Shield size={80} className="text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]" />, 
-      stats: { speed: 30, armor: 95, cannons: 80, cargo: 100 },
-      modules: { hull: 'Железное Дерево', sails: 'Испанский Шелк', figurehead: 'Золотой Лев' },
-      blueprint: 'Плавучая крепость. Галеон невозможно потопить одним залпом, а его трюмы способны вместить золото целой империи. Единственный минус — он медленный, как сонная черепаха.'
-    };
-    if (inventory.includes('s2')) return { 
-      name: 'Шхуна "Морской Волк"', desc: 'Быстрая и невероятно маневренная.', icon: <Wind size={80} className="text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.5)]" />, 
-      stats: { speed: 90, armor: 40, cannons: 40, cargo: 40 },
-      modules: { hull: 'Кедровые доски', sails: 'Косые паруса', figurehead: 'Морской Волк' },
-      blueprint: 'Корабль для дерзких налетов. Оснащен косыми парусами, что позволяет плыть круто к ветру. Идеален для того, чтобы ограбить галеон и скрыться в тумане до того, как они успеют развернуть пушки.'
-    };
-    if (inventory.includes('s1')) return { 
-      name: 'Рыбацкая Лодка', desc: 'Лучше, чем ничего.', icon: <Anchor size={80} className="text-slate-400 drop-shadow-[0_0_20px_rgba(148,163,184,0.5)]" />, 
-      stats: { speed: 10, armor: 5, cannons: 0, cargo: 5 },
-      modules: { hull: 'Гнилые доски', sails: 'Простыня', figurehead: 'Отсутствует' },
-      blueprint: 'Мы нашли эту дырявую посудину на берегу. Она пахнет рыбой и отчаянием. Надеюсь, мы сможем купить нормальный корабль до первого шторма.'
-    };
-    return { 
-      name: 'Бриг Lumina', desc: 'Наш первый общий корабль.', icon: <Ship size={80} className="text-sky-400 drop-shadow-[0_0_20px_rgba(56,189,248,0.5)]" />, 
-      stats: { speed: 50, armor: 50, cannons: 30, cargo: 50 },
-      modules: { hull: 'Крепкий Дуб', sails: 'Штормовая парусина', figurehead: 'Русалка' },
-      blueprint: 'Стандартный пиратский бриг. Двадцатипушечный корабль с отличным балансом между скоростью и огневой мощью. Здесь началась наша история.'
-    };
+  useEffect(() => {
+    setIsUIHidden(activeGame !== 'none');
+    return () => setIsUIHidden(false);
+  }, [activeGame, setIsUIHidden]);
+
+  const saveStats = (newGold: number, result: 'win' | 'lose' | 'push', winnerId?: PlayerId) => {
+    setGold(newGold);
+    localStorage.setItem('pirate_gold', newGold.toString());
+    if (result === 'push') return;
+    const newStats = { ...stats };
+    if (gameMode === 'ai') {
+      if (result === 'win') newStats.me.wins += 1;
+      else newStats.me.losses += 1;
+    } else if (winnerId) {
+      newStats[winnerId].wins += 1;
+      newStats[winnerId === 'me' ? 'her' : 'me'].losses += 1;
+    }
+    setStats(newStats);
+    localStorage.setItem('pirate_game_stats_v2', JSON.stringify(newStats));
   };
 
-  const flagship = getFlagship();
+  const handleGiftSent = (amount: number, type: 'gold' | 'skin', skinName?: string) => {
+    const newGold = gold - amount;
+    setGold(newGold);
+    localStorage.setItem('pirate_gold', newGold.toString());
+    
+    // Add notification or log for gift sending
+    console.log(`Sent gift: ${type === 'gold' ? amount + ' gold' : 'skin ' + skinName}`);
+  };
+
+  const games = [
+    { id: 'monopoly', title: 'Мои Владения', desc: 'Твоя империя', icon: <Landmark />, color: 'bg-amber-900' },
+    { id: 'treasure_hunt', title: 'Охота за Золотом', desc: 'Поле опасностей', icon: <MapIcon />, color: 'bg-emerald-900' },
+    { id: 'slots', title: 'Слоты Тортуги', desc: 'Джекпот в таверне', icon: <Sparkles />, color: 'bg-yellow-900' },
+    { id: 'crash', title: 'Крэш-корабль', desc: 'Успей выпрыгнуть!', icon: <Flame />, color: 'bg-rose-900' },
+    { id: 'truth_or_dare', title: 'Правда или Дело', desc: 'Кодекс чести', icon: <MessageSquare />, color: 'bg-amber-900' },
+    { id: 'lottery', title: 'Лотерея', desc: 'Джекпот на дне', icon: <Ticket />, color: 'bg-orange-900' },
+    { id: 'blackjack', title: 'Двадцать Одно', desc: 'Пиратский азарт', icon: <Dices />, color: 'bg-zinc-900' },
+    /* { id: 'fort_defense', title: 'Защита Форта', desc: 'Пушки к бою!', icon: <Shield />, color: 'bg-zinc-800' }, // TODO: Archive or delete later */
+  ];
 
   return (
-    <div className="relative min-h-screen bg-[#020a17] text-amber-100 pb-32 font-serif">
+    <div className="min-h-screen bg-[#2c1810] flex items-center justify-center font-sans overflow-hidden selection:bg-amber-500/30">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-10 pointer-events-none" />
       
-      {/* Background Decor */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-10" />
-        <div className="absolute top-0 right-0 w-full h-[600px] bg-[radial-gradient(ellipse_at_top_right,rgba(14,165,233,0.1)_0%,transparent_50%)]" />
-        <div className="absolute bottom-0 left-0 w-full h-[600px] bg-[radial-gradient(ellipse_at_bottom_left,rgba(245,158,11,0.05)_0%,transparent_50%)]" />
-      </div>
-
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-16 space-y-20">
+      <div className="w-full h-screen bg-[#fdfaf5] flex flex-col md:flex-row overflow-hidden relative shadow-inner">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
         
-        {/* HEADER */}
-        <header className="text-center space-y-6 relative">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-amber-500/10 rounded-full blur-[50px] -z-10" />
-          <div className="inline-flex items-center justify-center p-6 bg-black/40 rounded-full border-4 border-amber-500/20 shadow-[0_0_50px_rgba(245,158,11,0.2)] backdrop-blur-md">
-            <Compass size={56} className="text-amber-400" />
+        {/* Mobile Navigation Header */}
+        <div className="md:hidden flex items-center justify-between p-4 bg-[#f2e2ba] border-b-4 border-[#3e2723]/10 relative z-[60]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-950 rounded-xl flex items-center justify-center text-amber-500 shadow-lg">
+              <Anchor size={20} />
+            </div>
+            <h1 className="text-lg font-black text-amber-950 uppercase tracking-tighter">Порт</h1>
           </div>
-          <div className="space-y-2">
-             <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-400 to-amber-700 drop-shadow-lg">
-               Пиратская Хартия
-             </h1>
-             <p className="text-sky-200/60 font-black uppercase tracking-[0.4em] text-sm flex items-center justify-center gap-4">
-                <Sword size={16} /> Легенда о двух капитанах <Sword size={16} />
-             </p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-white/40 px-3 py-1.5 rounded-full border-2 border-amber-900/5">
+              <span className="text-sm font-black text-amber-950">{gold}</span>
+              <Coins size={14} className="text-amber-500" />
+            </div>
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 bg-amber-950 text-amber-500 rounded-xl shadow-lg"
+            >
+              {isMobileMenuOpen ? <X size={20} /> : <LayoutGrid size={20} />}
+            </button>
           </div>
-        </header>
+        </div>
 
-        {/* SECTION 1: THE SHIP */}
-        <section className="relative">
-           <div className="absolute -inset-4 bg-sky-900/10 blur-2xl rounded-[4rem] -z-10" />
-           <div 
-             onClick={() => setShowShipDetails(true)}
-             className="pirate-wood p-8 md:p-12 rounded-[3rem] border-4 border-sky-900/50 shadow-2xl relative group cursor-pointer hover:border-sky-500/50 transition-colors"
-           >
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-colors z-0" />
-              <div className="absolute top-6 right-6 p-3 bg-sky-500/10 rounded-full text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                 <Info size={24} />
-              </div>
-              
-              <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                 {/* Ship Icon Display */}
-                 <div className="w-48 h-48 bg-[#020a17] rounded-full border-8 border-sky-800 flex items-center justify-center shadow-[0_0_60px_rgba(14,165,233,0.3)] relative shrink-0 group-hover:scale-105 transition-transform">
-                    <div className="absolute inset-0 rounded-full border-2 border-sky-400/30 animate-spin-slow border-dashed" />
-                    <div className="scale-[0.8]">{flagship.icon}</div>
-                 </div>
-                 
-                 <div className="flex-1 space-y-6 text-center md:text-left">
-                    <div className="space-y-2">
-                       <p className="text-[10px] font-black uppercase tracking-widest text-sky-400/60">Текущий Флагман</p>
-                       <h2 className="text-5xl font-black uppercase tracking-tighter text-sky-100 drop-shadow-lg">{flagship.name}</h2>
-                       <p className="text-sky-100/60 italic text-lg border-l-4 border-sky-500/30 pl-4">"{flagship.desc}"</p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-sky-500/20">
-                       <div className="bg-black/40 p-4 rounded-2xl border border-sky-500/10 group-hover:border-sky-500/30 transition-colors">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/40 mb-1">Скорость</p>
-                          <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden mt-2"><div className="h-full bg-sky-400" style={{ width: `${flagship.stats.speed}%`}} /></div>
-                       </div>
-                       <div className="bg-black/40 p-4 rounded-2xl border border-sky-500/10 group-hover:border-red-500/30 transition-colors">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/40 mb-1">Орудия</p>
-                          <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden mt-2"><div className="h-full bg-red-400" style={{ width: `${flagship.stats.cannons}%`}} /></div>
-                       </div>
-                       <div className="bg-black/40 p-4 rounded-2xl border border-sky-500/10 group-hover:border-amber-500/30 transition-colors">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/40 mb-1">Броня</p>
-                          <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden mt-2"><div className="h-full bg-amber-400" style={{ width: `${flagship.stats.armor}%`}} /></div>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </section>
-
-        {/* SECTION 2: CREW STATS */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-6">
-           <StatBlock icon={<Coins size={28} className="text-amber-400" />} label="Казна (Золото)" value={gold} color="amber" />
-           <StatBlock icon={<Users size={28} className="text-blue-400" />} label="Размер Команды" value={crew} color="blue" />
-           <StatBlock icon={<Crosshair size={28} className="text-red-400" />} label="Врагов Потоплено" value={sunkShips} color="red" />
-           <StatBlock icon={<Trophy size={28} className="text-emerald-400" />} label="Артефактов" value={inventory.length} color="emerald" />
-        </section>
-
-        {/* SECTION 4: PIRATE CODE & FUN FACTS */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-10 pt-8">
-           {/* Pirate Code */}
-           <div className="p-8 md:p-10 rounded-[3rem] bg-[#2a1a10] border-4 border-amber-900/50 shadow-2xl relative overflow-hidden pirate-wood">
-              <div className="absolute top-4 right-4 text-amber-900/20"><Scroll size={120} /></div>
-              <div className="relative z-10 space-y-6">
-                 <div className="flex items-center gap-4 border-b-2 border-amber-700/50 pb-4">
-                    <Scroll size={32} className="text-amber-500" />
-                    <h2 className="text-3xl font-black uppercase tracking-tighter text-amber-400">Пиратский Кодекс</h2>
-                 </div>
-                 <ul className="space-y-4 text-left">
-                    <li className="flex gap-4 items-start text-amber-100/80 leading-relaxed">
-                       <span className="font-black text-amber-500 text-xl">I.</span>
-                       <p>Капитан Гринч всегда прав. Если Капитан не прав, смотри Статью II.</p>
-                    </li>
-                    <li className="flex gap-4 items-start text-amber-100/80 leading-relaxed">
-                       <span className="font-black text-amber-500 text-xl">II.</span>
-                       <p>Квартирмейстер Синди решает, когда Капитан прав. А прав он только когда она согласна.</p>
-                    </li>
-                    <li className="flex gap-4 items-start text-amber-100/80 leading-relaxed">
-                       <span className="font-black text-amber-500 text-xl">III.</span>
-                       <p>Добытый ром, сокровища и поцелуи делятся строго поровну между командирами.</p>
-                    </li>
-                    <li className="flex gap-4 items-start text-amber-100/80 leading-relaxed">
-                       <span className="font-black text-amber-500 text-xl">IV.</span>
-                       <p>Тот, кто отстает на суше, остается на суше. Но мы никого не бросаем.</p>
-                    </li>
-                 </ul>
-                 <div className="pt-6 mt-6 border-t border-amber-900/50 flex justify-between items-end opacity-50">
-                    <p className="font-serif italic text-sm text-left">Подписано кровью,<br/> Богдан и Полина</p>
-                    <div className="w-16 h-16 rounded-full border-2 border-red-900 flex items-center justify-center text-red-900 rotate-12">
-                      Печать
-                    </div>
+        {/* Left Sidebar (Desktop and Mobile Overlay) */}
+        <div className={cn(
+          "fixed inset-0 md:relative md:flex w-full md:w-80 border-r-4 border-[#3e2723]/5 bg-[#f2e2ba]/95 md:bg-[#f2e2ba]/40 backdrop-blur-xl flex flex-col z-[55] transition-transform duration-500 md:translate-x-0",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
+          <div className="p-6 space-y-6 flex-1 overflow-y-auto custom-scrollbar pt-20 md:pt-6">
+               <div className="hidden md:flex items-center gap-4 mb-10">
+                  <div className="w-14 h-14 bg-amber-950 rounded-2xl flex items-center justify-center text-amber-500 shadow-xl border-2 border-white/20">
+                     <Anchor size={28} />
                   </div>
-              </div>
-           </div>
+                  <div>
+                     <h1 className="text-xl font-black text-amber-950 uppercase leading-none tracking-tighter">Порт каюты</h1>
+                     <p className="text-[9px] font-black uppercase text-amber-900/40 tracking-widest">Список всех развлечений</p>
+                  </div>
+               </div>
 
-           {/* Fun Facts Logbook */}
-           <div className="p-8 md:p-10 rounded-[3rem] bg-slate-900/60 border-4 border-sky-900/30 shadow-2xl backdrop-blur-md relative overflow-hidden">
-              <div className="absolute top-4 right-4 text-sky-500/10"><Ship size={150} /></div>
-              <div className="relative z-10 space-y-6">
-                 <div className="flex items-center gap-4 border-b-2 border-sky-500/20 pb-4">
-                    <Compass size={32} className="text-sky-400" />
-                    <h2 className="text-3xl font-black uppercase tracking-tighter text-sky-100">Бортовой Журнал</h2>
-                 </div>
-                 
-                 <div className="space-y-4 pt-2">
-                    <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-sky-500/10">
-                       <div className="flex items-center gap-3 text-sky-200">
-                          <CheckCircle size={20} className="text-emerald-500" /> Дней без бунта на корабле
-                       </div>
-                       <p className="font-black text-2xl text-emerald-400">342</p>
-                    </div>
-                    <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-sky-500/10">
-                       <div className="flex items-center gap-3 text-sky-200">
-                          <Beer size={20} className="text-amber-500" /> Выпито бочек рома
-                       </div>
-                       <p className="font-black text-2xl text-amber-400">14</p>
-                    </div>
-                    <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-sky-500/10">
-                       <div className="flex items-center gap-3 text-sky-200">
-                          <Heart size={20} className="text-red-500" /> Романтичных закатов в море
-                       </div>
-                       <p className="font-black text-2xl text-red-400">∞</p>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </section>
-
-      </div>
-
-      {/* MODALS */}
-
-      {/* 1. Flagship Details / Garage Modal */}
-      <AnimatePresence>
-        {showShipDetails && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowShipDetails(false)} className="absolute inset-0 bg-sky-950/90 backdrop-blur-xl" />
-             
-             <motion.div initial={{ scale: 0.9, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0, y: 50 }} 
-               className="relative w-full max-w-6xl h-[85vh] bg-[#020a17] rounded-[3rem] border-4 border-sky-500/30 shadow-[0_0_100px_rgba(14,165,233,0.3)] overflow-hidden flex flex-col"
-             >
-                {/* Blueprint Aesthetic Background */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(14,165,233,0.1)_2px,transparent_2px),linear-gradient(90deg,rgba(14,165,233,0.1)_2px,transparent_2px)] bg-[size:40px_40px] pointer-events-none opacity-50" />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,#020a17_0%,transparent_100%)] opacity-80 pointer-events-none" />
-
-                {/* Header */}
-                <div className="relative z-20 flex items-center justify-between p-8 border-b border-sky-500/20 bg-black/40">
-                   <div className="flex items-center gap-4">
-                      <Wrench size={32} className="text-sky-400" />
+            <div className="grid grid-cols-1 gap-3">
+              {games.map((game, index) => (
+                <div key={game.id} className="contents">
+                  <button 
+                    onClick={() => {
+                      setActiveGame(game.id as GameType);
+                      setIsMobileMenuOpen(false);
+                    }} 
+                    className={cn(
+                      "group p-4 rounded-[2rem] text-left transition-all relative overflow-hidden border-2", 
+                      activeGame === game.id ? "bg-white border-amber-500 shadow-xl -translate-y-1" : "bg-white/20 border-transparent hover:bg-white/40 hover:border-white/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-4 relative z-10">
+                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md", game.color)}>{game.icon}</div>
                       <div>
-                         <p className="text-[10px] font-black uppercase tracking-widest text-sky-500/60">Верфь и Ангар</p>
-                         <h2 className="text-3xl font-black uppercase tracking-tighter text-sky-100">Сборка: {flagship.name}</h2>
+                        <h4 className={cn("font-black text-xs uppercase tracking-widest", activeGame === game.id ? "text-slate-900" : "text-amber-950/70")}>{game.title}</h4>
+                        <p className={cn("text-[8px] font-black uppercase tracking-tighter", activeGame === game.id ? "text-amber-500" : "text-amber-900/30")}>{game.desc}</p>
+                      </div>
+                      {activeGame === game.id && (
+                        <motion.div layoutId="active" className="absolute -right-2 w-1 h-6 bg-amber-500 rounded-full" />
+                      )}
+                    </div>
+                  </button>
+                  {(game.id === 'monopoly' || game.id === 'crash') && index < games.length - 1 && (
+                    <div className="my-2 px-6">
+                      <div className="h-px bg-amber-950/10 w-full" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4 mb-20 md:mb-0">
+             <div className="bg-white/40 backdrop-blur-md p-6 rounded-[2.5rem] shadow-sm border-2 border-amber-900/5 relative overflow-hidden group">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-10 pointer-events-none" />
+                
+                <div className="flex items-center gap-4 relative z-10">
+                   <div className="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center text-white shadow-md border border-white/20 shadow-amber-500/20">
+                      <Coins size={24} />
+                   </div>
+                   <div className="flex-1">
+                      <p className="text-[8px] font-black uppercase text-amber-900/40 leading-none mb-1 tracking-[0.2em]">Ваш кошелек</p>
+                      <div className="flex items-center gap-2">
+                         <p className="text-2xl font-black text-amber-950 tracking-tighter">{gold}</p>
+                         <Coins size={14} className="text-amber-500 animate-pulse" />
                       </div>
                    </div>
-                   <button onClick={() => setShowShipDetails(false)} className="p-3 bg-sky-500/10 rounded-full text-sky-500/40 hover:text-sky-300 hover:bg-sky-500/20 transition-colors">
-                     <X size={24} />
+                   <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowGiftModal(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="p-3 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors shadow-lg border border-white/10"
+                   >
+                      <Gift size={18} />
                    </button>
                 </div>
-
-                {/* Main Garage Content */}
-                <div className="flex-1 relative z-10 flex flex-col lg:flex-row overflow-hidden">
-                   
-                   {/* Left Column: Ship 3D View & Health */}
-                   <div className="w-full lg:w-1/3 border-r border-sky-500/20 p-8 flex flex-col items-center justify-center space-y-8 bg-sky-900/5">
-                      <div className="relative w-full h-64 flex flex-col items-center justify-center opacity-90 scale-90">
-                         {/* Nose / Figurehead */}
-                         <div className={cn("absolute top-0 w-16 h-16 rounded-t-full border-4 flex items-center justify-center z-20 shadow-[0_0_30px_currentColor] transition-colors", shipHealth < 30 ? 'border-red-500 bg-red-950 text-red-500 animate-pulse' : 'border-sky-400 bg-sky-950 text-sky-400')}>
-                            {currentFigurehead.icon}
-                         </div>
-                         
-                         {/* Sails Area */}
-                         <div className={cn("absolute top-10 w-32 h-24 border-4 rounded-3xl flex items-center justify-center z-10 shadow-[0_0_20px_currentColor] transition-colors", shipHealth < 50 ? 'border-orange-500 bg-orange-950/80 text-orange-400' : 'border-sky-500 bg-sky-900/60 text-sky-200')}>
-                            {currentSails.icon}
-                         </div>
-                         
-                         {/* Hull / Main Deck */}
-                         <div className={cn("absolute top-16 w-24 h-48 border-4 rounded-b-[4rem] flex flex-col items-center justify-end pb-6 z-0 shadow-[0_0_40px_currentColor] transition-colors", shipHealth < 40 ? 'border-red-600 bg-[#1a0505] text-red-600 animate-pulse' : 'border-sky-700 bg-[#020a17] text-sky-600')}>
-                            <Anchor size={32} />
-                         </div>
-
-                         {/* Cannons Left & Right */}
-                         <div className="absolute top-28 w-40 flex justify-between px-1 z-30 pointer-events-none">
-                            <div className={cn("w-6 h-12 border-y-4 border-l-4 rounded-l-xl flex items-center justify-center shadow-[0_0_15px_currentColor]", shipHealth < 70 ? 'border-red-500 bg-red-900/80 text-red-400' : 'border-sky-400 bg-sky-900 text-sky-400')}>{currentCannons.icon}</div>
-                            <div className={cn("w-6 h-12 border-y-4 border-r-4 rounded-r-xl flex items-center justify-center shadow-[0_0_15px_currentColor]", shipHealth < 70 ? 'border-red-500 bg-red-900/80 text-red-400' : 'border-sky-400 bg-sky-900 text-sky-400')}>{currentCannons.icon}</div>
-                         </div>
-                      </div>
-
-                      <div className="w-full space-y-4 bg-black/60 p-6 rounded-3xl border border-sky-500/20 shadow-xl">
-                         <div className="flex justify-between items-center text-sm font-black uppercase tracking-widest">
-                            <span className="text-sky-200">Целостность</span>
-                            <span className={shipHealth > 50 ? "text-emerald-400" : "text-red-400"}>{shipHealth}%</span>
-                         </div>
-                         <div className="h-4 bg-slate-900 rounded-full overflow-hidden border border-sky-500/10">
-                            <motion.div 
-                               initial={{ width: 0 }} 
-                               animate={{ width: `${shipHealth}%` }} 
-                               className={cn("h-full transition-all duration-1000", shipHealth > 50 ? "bg-emerald-500" : "bg-red-500")}
-                            />
-                         </div>
-
-                         <button 
-                           onClick={handleRepair}
-                           disabled={shipHealth === 100 || gold < 100}
-                           className={cn(
-                             "w-full py-4 mt-2 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all shadow-lg",
-                             shipHealth === 100 ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 cursor-not-allowed" 
-                             : gold >= 100 ? "bg-amber-500 text-slate-950 hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_20px_rgba(245,158,11,0.3)]" 
-                             : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
-                           )}
-                         >
-                           <Wrench size={14} /> 
-                           {shipHealth === 100 ? 'Ремонт не требуется' : 'Заделать пробоины (100 Золота)'}
-                         </button>
-                      </div>
-                   </div>
-
-                   {/* Middle Column: Ship Parts / Modules */}
-                   <div className="flex-1 p-8 overflow-y-auto space-y-8 custom-scrollbar">
-                      <div className="flex items-center gap-3 border-b border-sky-500/20 pb-4">
-                         <Shield size={24} className="text-sky-400" />
-                         <h3 className="text-2xl font-black uppercase tracking-widest text-sky-100">Модули Корабля</h3>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <ModuleSlot isActive={activeSlot === 'hull'} onClick={() => setActiveSlot('hull')} title="Корпус" icon={currentHull.icon} item={currentHull.name} stat={currentHull.stat} type="hull" />
-                         <ModuleSlot isActive={activeSlot === 'sails'} onClick={() => setActiveSlot('sails')} title="Паруса" icon={currentSails.icon} item={currentSails.name} stat={currentSails.stat} type="sails" />
-                         <ModuleSlot isActive={activeSlot === 'cannons'} onClick={() => setActiveSlot('cannons')} title="Орудия" icon={currentCannons.icon} item={currentCannons.name} stat={currentCannons.stat} type="cannons" />
-                         <ModuleSlot isActive={activeSlot === 'figurehead'} onClick={() => setActiveSlot('figurehead')} title="Фигура" icon={currentFigurehead.icon} item={currentFigurehead.name} stat={currentFigurehead.stat} type="figurehead" />
-                      </div>
-
-                      <div className="bg-sky-900/10 p-6 rounded-2xl border border-sky-500/20 mt-8 relative overflow-hidden group">
-                         <div className="absolute inset-0 bg-sky-500/5 -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" />
-                         <p className="text-[10px] font-black uppercase tracking-widest text-sky-500/60 mb-2 relative z-10">Сводка Конструктора</p>
-                         <p className="text-sky-200/80 font-serif italic leading-relaxed relative z-10">Выберите модуль, чтобы перейти на склад деталей и переоборудовать флагман. Каждая деталь влияет на выживаемость судна.</p>
-                      </div>
-                   </div>
-
-                   {/* Right Column: Dynamic View (Battle Log OR Inventory) */}
-                   <div className="w-full lg:w-1/3 bg-black/60 p-8 overflow-y-auto custom-scrollbar border-l border-sky-500/20">
-                      <AnimatePresence mode="wait">
-                        {activeSlot ? (
-                          <motion.div key="inventory" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4 text-left">
-                             <div className="flex items-center justify-between border-b border-sky-500/20 pb-4 mb-6">
-                                <div className="flex items-center gap-3">
-                                   <Wrench size={24} className="text-sky-400" />
-                                   <h3 className="text-xl font-black uppercase tracking-widest text-sky-100">Склад Деталей</h3>
-                                </div>
-                                <button onClick={() => setActiveSlot(null)} className="text-[10px] font-black uppercase tracking-widest text-sky-500/60 hover:text-sky-300">Назад</button>
-                             </div>
-                             
-                             <div className="space-y-4">
-                                {PARTS_DB[activeSlot].map(part => (
-                                  <div 
-                                    key={part.id} 
-                                    onClick={() => setEquippedParts(prev => ({...prev, [activeSlot]: part.id}))}
-                                    className={cn(
-                                      "p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-4 group",
-                                      equippedParts[activeSlot as keyof typeof equippedParts] === part.id 
-                                        ? "bg-sky-500/20 border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.2)]" 
-                                        : "bg-black/40 border-sky-500/10 hover:border-sky-500/40"
-                                    )}
-                                  >
-                                     <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors", equippedParts[activeSlot as keyof typeof equippedParts] === part.id ? "bg-sky-500 text-slate-900" : "bg-sky-500/10 text-sky-400 group-hover:bg-sky-500/20")}>
-                                        {part.icon}
-                                     </div>
-                                     <div className="flex-1">
-                                        <h4 className="text-sm font-bold text-sky-100">{part.name}</h4>
-                                        <p className="text-xs text-sky-200/60 italic mb-2">"{part.desc}"</p>
-                                        <div className="flex flex-wrap gap-2 mb-2">
-                                           <span className="text-[8px] uppercase font-black px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md border border-emerald-500/20">+{part.pros}</span>
-                                           <span className="text-[8px] uppercase font-black px-2 py-0.5 bg-red-500/10 text-red-400 rounded-md border border-red-500/20">-{part.cons}</span>
-                                        </div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">{part.stat}</p>
-                                     </div>
-                                     {equippedParts[activeSlot as keyof typeof equippedParts] === part.id && (
-                                       <CheckCircle size={20} className="text-sky-400" />
-                                     )}
-                                  </div>
-                                ))}
-                             </div>
-                          </motion.div>
-                        ) : (
-                          <motion.div key="history" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="text-left">
-                            <div className="flex items-center gap-3 border-b border-sky-500/20 pb-4 mb-6">
-                               <History size={24} className="text-amber-400" />
-                               <h3 className="text-2xl font-black uppercase tracking-widest text-amber-100">Журнал Боёв</h3>
-                             </div>
-                               <div className="space-y-4">
-                                  {[
-                                    { date: 'Сегодня', title: 'Побез от Королевского Флота', desc: 'Ушли в шторм, порвали два паруса.', dmg: '-15% корпуса', type: 'escape' },
-                                    { date: 'Вчера', title: 'Ограбление Галеона', desc: 'Захватили груз специй и рома.', dmg: '+2500 золота', type: 'victory' },
-                                    { date: '3 дня назад', title: 'Нападение Кракена', desc: 'Щупальца пробили нижнюю палубу.', dmg: '-40% корпуса', type: 'danger' },
-                                    { date: 'Неделю назад', title: 'Столкновение с Рифом', desc: 'Штурман был пьян.', dmg: '-10% корпуса', type: 'danger' },
-                                  ].map((log, i) => (
-                                    <div key={i} className="p-4 rounded-2xl bg-[#020a17] border border-sky-500/10 hover:border-amber-500/30 transition-colors">
-                                       <p className="text-[9px] font-black uppercase tracking-widest text-amber-500/50">{log.date}</p>
-                                       <h4 className="text-sm font-bold text-sky-100 mt-1 mb-2">{log.title}</h4>
-                                    <p className="text-xs text-sky-200/60 italic mb-3">"{log.desc}"</p>
-                                    <div className={cn("text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg inline-block", 
-                                      log.type === 'victory' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                                      'bg-red-500/10 text-red-400 border border-red-500/20')}
-                                    >
-                                       {log.dmg}
-                                    </div>
-                                 </div>
-                               ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                   </div>
-
-                </div>
-             </motion.div>
+             </div>
           </div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+        </div>
 
-function StatBlock({ icon, label, value, color }: any) {
-  const colors: Record<string, string> = {
-    amber: "border-amber-500/20 text-amber-400 bg-amber-500/5 shadow-[0_0_20px_rgba(245,158,11,0.1)]",
-    blue: "border-blue-500/20 text-blue-400 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.1)]",
-    red: "border-red-500/20 text-red-400 bg-red-500/5 shadow-[0_0_20px_rgba(239,68,68,0.1)]",
-    emerald: "border-emerald-500/20 text-emerald-400 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]",
-  };
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col relative bg-white/20 min-h-0">
+          {activeGame === 'none' ? (
+            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden p-6">
+              {/* Background Decor */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] md:w-[600px] h-[300px] md:h-[600px] bg-amber-500/10 blur-[60px] md:blur-[120px] rounded-full animate-pulse" />
+              
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                className="text-center relative z-10 space-y-6 md:space-y-10"
+              >
+                <div className="relative inline-block">
+                  <div className="absolute -inset-10 bg-amber-500/10 blur-3xl rounded-full" />
+                  <div className="w-32 h-32 md:w-56 md:h-56 bg-white rounded-[2rem] md:rounded-[4rem] shadow-[0_20px_60px_rgba(0,0,0,0.05)] flex items-center justify-center relative border border-white transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                    <Dices className="w-16 h-16 md:w-24 md:h-24 text-amber-600" />
+                  </div>
+                </div>
 
-  return (
-    <div className={cn("p-6 rounded-[2rem] border text-center flex flex-col items-center justify-center backdrop-blur-md transition-transform hover:scale-105 cursor-default", colors[color])}>
-      <div className="mb-3 opacity-80">{icon}</div>
-      <p className="text-4xl font-black tracking-tighter text-slate-100 leading-none mb-2">{value}</p>
-      <p className="text-[9px] font-black uppercase tracking-widest opacity-60">{label}</p>
-    </div>
-  );
-}
+                <div className="space-y-2 md:space-y-4 max-w-xl mx-auto">
+                  <div className="space-y-1">
+                     <p className="text-amber-500 font-black uppercase tracking-[0.4em] text-[8px] md:text-[10px]">Королевская гавань</p>
+                     <h2 className="text-4xl md:text-7xl font-black text-amber-950 uppercase tracking-tighter leading-tight">
+                       Игорный <span className="text-amber-600">Квартал</span>
+                     </h2>
+                  </div>
+                  <p className="text-amber-900/40 font-serif italic text-lg md:text-2xl leading-relaxed">
+                    «Золото любит смелых, а море — удачливых. Выбери стол, капитан!»
+                  </p>
+                </div>
 
-function ModuleSlot({ title, icon, item, stat, onClick, isActive }: any) {
-  return (
-    <div 
-      onClick={onClick}
-      className={cn(
-        "p-4 rounded-2xl border transition-all cursor-pointer flex items-center gap-4 group",
-        isActive 
-          ? "bg-sky-500/20 border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.2)]" 
-          : "bg-sky-900/10 border-sky-500/20 hover:border-sky-500/55 hover:bg-sky-500/5"
-      )}
-    >
-       <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-transform", isActive ? "bg-sky-500 text-slate-900 scale-110" : "bg-sky-500/10 text-sky-400 group-hover:scale-110")}>
-          {icon}
-       </div>
-       <div className="flex-1">
-          <p className="text-[9px] font-black uppercase tracking-widest text-sky-500/50">{title}</p>
-          <p className="font-bold text-sky-100 text-sm leading-tight">{item}</p>
-          <p className="text-[10px] text-amber-400/80 mt-1">{stat}</p>
-       </div>
+                {/* Mobile Stats Toggle (Visible only on mobile when no game is active) */}
+                <div className="md:hidden flex gap-3 justify-center">
+                  <button 
+                    onClick={() => setSidebarTab('stats')}
+                    className={cn(
+                      "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border-2",
+                      sidebarTab === 'stats' ? "bg-[#3e2723] text-white border-[#3e2723]" : "bg-white text-amber-900/40 border-amber-900/5"
+                    )}
+                  >
+                    Журнал
+                  </button>
+                  <button 
+                    onClick={() => setSidebarTab('chat')}
+                    className={cn(
+                      "px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border-2",
+                      sidebarTab === 'chat' ? "bg-[#3e2723] text-white border-[#3e2723]" : "bg-white text-amber-900/40 border-amber-900/5"
+                    )}
+                  >
+                    Чат
+                  </button>
+                </div>
+
+                {/* Mobile Stats/Chat Display */}
+                <div className="md:hidden w-full max-w-sm mx-auto mt-6">
+                   <AnimatePresence mode="wait">
+                      {sidebarTab === 'stats' ? (
+                        <motion.div 
+                          key="mobile-stats" 
+                          initial={{ opacity: 0, y: 10 }} 
+                          animate={{ opacity: 1, y: 0 }} 
+                          exit={{ opacity: 0, y: 10 }}
+                          className="grid grid-cols-2 gap-2"
+                        >
+                           <StatCard label="Побед" value={stats.me.wins} color="emerald" icon={<Trophy size={14} />} />
+                           <StatCard label="Бед" value={stats.me.losses} color="red" icon={<Skull size={14} />} />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="mobile-chat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="h-[200px]">
+                          <PirateChat />
+                        </motion.div>
+                      )}
+                   </AnimatePresence>
+                </div>
+              </motion.div>
+            </div>
+          ) : (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex flex-col relative z-10 overflow-hidden">
+              {activeGame === 'treasure_hunt' && <TreasureHuntGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'truth_or_dare' && <TruthOrDareGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'lottery' && <SunkenShipLotteryGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'fort_defense' && <FortDefenseGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'monopoly' && <PirateEmpireGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'slots' && <TortugaSlotsGame gold={gold} onResult={saveStats} />}
+              {activeGame === 'blackjack' && <BlackjackGame gold={gold} onResult={saveStats} mode={gameMode} />}
+              {activeGame === 'crash' && <CrashShipGame gold={gold} onResult={saveStats} />}
+              
+              <div className="absolute top-4 md:top-8 left-4 md:left-8 right-4 md:right-8 flex justify-between items-center z-50 pointer-events-none">
+                <button onClick={() => setActiveGame('none')} className="pointer-events-auto p-3 md:p-4 bg-white text-amber-900 rounded-xl md:rounded-2xl border-2 md:border-4 border-amber-900/10 shadow-xl hover:bg-amber-50 transition-all"><ChevronLeft size={20} className="md:w-6 md:h-6" /></button>
+                <button onClick={() => setShowInfo(true)} className="pointer-events-auto p-3 md:p-4 bg-white text-amber-900 rounded-xl md:rounded-2xl border-2 md:border-4 border-amber-900/10 shadow-xl hover:bg-amber-50 transition-all"><Info size={20} className="md:w-6 md:h-6" /></button>
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Right Sidebar (Desktop only) */}
+        <div className="hidden md:flex w-96 border-l-8 border-[#3e2723]/10 bg-[#3e2723]/5 p-8 flex-col relative z-20">
+          <div className="flex p-1 bg-white/40 rounded-2xl border-2 border-amber-900/5 mb-8 relative">
+              <button onClick={() => setSidebarTab('stats')} className={cn("flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", sidebarTab === 'stats' ? "bg-[#3e2723] text-white shadow-lg" : "text-amber-900/40")}><LayoutGrid size={14} />Журнал</button>
+              <button onClick={() => setSidebarTab('chat')} className={cn("flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", sidebarTab === 'chat' ? "bg-[#3e2723] text-white shadow-lg" : "text-amber-900/40")}><MessageSquare size={14} />Чат</button>
+              
+              {sidebarTab === 'stats' && (
+                <button 
+                  onClick={clearStats}
+                  className="absolute -top-10 right-0 p-2 text-rose-900/30 hover:text-rose-600 transition-colors"
+                  title="Очистить журнал"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center min-h-0 py-4">
+            <AnimatePresence mode="wait">
+              {sidebarTab === 'stats' ? (
+                <motion.div 
+                  key="stats" 
+                  initial={{ opacity: 0, scale: 0.95 }} 
+                  animate={{ opacity: 1, scale: 1 }} 
+                  exit={{ opacity: 0, scale: 0.95 }} 
+                  className="w-full h-full flex flex-col justify-center"
+                >
+                   <div className="grid grid-cols-1 gap-4 px-2">
+                      <StatCard label="Побед" value={stats.me.wins} color="emerald" icon={<Trophy size={20} />} />
+                      <StatCard label="Поражений" value={stats.me.losses} color="red" icon={<Skull size={20} />} />
+                      <StatCard 
+                        label="Винрейт" 
+                        value={`${stats.me.wins + stats.me.losses === 0 ? 0 : Math.round((stats.me.wins / (stats.me.wins + stats.me.losses)) * 100)}%`} 
+                        color="sky" 
+                        icon={<Target size={20} />} 
+                      />
+                      <StatCard 
+                        label="Удача" 
+                        value={`${stats.me.wins + stats.me.losses === 0 ? '??' : Math.min(99, Math.max(1, Math.round((stats.me.wins / (stats.me.wins + stats.me.losses)) * 110)))}%`} 
+                        color="amber" 
+                        icon={<Sparkles size={20} />} 
+                      />
+                   </div>
+                </motion.div>
+              ) : (
+                <motion.div key="chat" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="h-full flex flex-col">
+                  <PirateChat />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Info Modal */}
+        <AnimatePresence>
+          {showGiftModal && (
+            <GiftSystem 
+              gold={gold} 
+              onGiftSent={handleGiftSent} 
+              onClose={() => setShowGiftModal(false)} 
+            />
+          )}
+
+          {showInfo && (
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="fixed inset-0 bg-amber-950/20 backdrop-blur-xl z-[200] flex items-center justify-center p-4 md:p-6 lg:p-12"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }} 
+                animate={{ scale: 1, y: 0 }} 
+                className="bg-[#f2e2ba] border-4 md:border-[12px] border-[#3e2723]/10 rounded-[2rem] md:rounded-[4rem] p-6 md:p-8 lg:p-14 max-w-2xl w-full relative overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
+              >
+                {/* Background Decor */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+                
+                <button 
+                  onClick={() => setShowInfo(false)} 
+                  className="absolute top-4 md:top-10 right-4 md:right-10 p-2 md:p-3 text-amber-900/40 hover:text-red-700 transition-colors z-20"
+                >
+                  <X size={24} className="md:w-8 md:h-8" />
+                </button>
+
+                <div className="relative z-10 space-y-6 md:space-y-10 overflow-y-auto custom-scrollbar pr-2">
+                  <div className="space-y-1 md:space-y-2">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-6 md:w-10 h-1 bg-amber-500 rounded-full" />
+                      <p className="text-amber-500 font-black uppercase tracking-[0.3em] text-[8px] md:text-[10px]">Информация о игре</p>
+                    </div>
+                    <h3 className="text-3xl md:text-5xl font-black text-amber-950 uppercase tracking-tighter">
+                      {GAME_RULES[activeGame]?.title || 'Правила'}
+                    </h3>
+                  </div>
+
+                  <div className="space-y-3 md:space-y-4 text-amber-900/60 font-serif italic text-base md:text-lg leading-relaxed">
+                    {GAME_RULES[activeGame]?.rules.map((rule, i) => (
+                      <motion.div 
+                        key={i} 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        className="flex gap-3 md:gap-5 items-start bg-white/40 p-4 md:p-5 rounded-[1.5rem] md:rounded-[2rem] border-2 border-amber-900/5 hover:bg-white/60 transition-colors group shadow-inner"
+                      >
+                        <span className="shrink-0 w-6 h-6 md:w-8 md:h-8 rounded-lg md:rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 font-black text-xs group-hover:bg-amber-500 group-hover:text-white transition-all">
+                          {i + 1}
+                        </span>
+                        <p className="flex-1 text-sm md:text-base">{rule}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  <button 
+                    onClick={() => setShowInfo(false)} 
+                    className="w-full py-4 md:py-8 bg-amber-600 hover:bg-amber-500 text-white rounded-[1.5rem] md:rounded-[2.5rem] font-black uppercase tracking-[0.2em] shadow-[0_15px_35px_rgba(217,119,6,0.2)] transition-all active:scale-95 border-b-4 md:border-b-8 border-amber-800 text-xs md:text-base"
+                  >
+                    Принято, капитан!
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import "./globals.css";
 import { AuthGuard } from "@/components/AuthGuard";
 import { DataProvider } from "@/components/DataProvider";
 import { EraProvider } from "@/context/EraContext";
+import { MusicProvider } from "@/context/MusicContext";
+import { AdminSettingsProvider } from "@/context/AdminSettingsContext";
 import { EraContent } from "@/components/EraContent";
 
 const inter = Inter({
@@ -41,7 +43,11 @@ export default function RootLayout({
         <AuthGuard>
           <DataProvider>
             <EraProvider>
-              <EraContent>{children}</EraContent>
+              <AdminSettingsProvider>
+                <MusicProvider>
+                  <EraContent>{children}</EraContent>
+                </MusicProvider>
+              </AdminSettingsProvider>
             </EraProvider>
           </DataProvider>
         </AuthGuard>

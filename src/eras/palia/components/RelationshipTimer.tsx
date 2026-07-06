@@ -70,37 +70,40 @@ export const RelationshipTimer = () => {
   const altStats = getAlternativeStats();
 
   return (
-    <Card className="flex flex-col items-center justify-center gap-6 text-center h-full py-10 relative overflow-hidden group">
+    <div className="relative flex flex-col items-center justify-center gap-6 text-center h-full py-10 px-8 bg-[#fdfaf3] border-[12px] border-[#e6d5bc]/30 shadow-[20px_20px_60px_rgba(0,0,0,0.1)] rounded-[3rem] overflow-hidden group">
+      {/* Texture Overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+      
       <button 
         onClick={() => {
           const modes: TimerMode[] = ['classic', 'beats', 'breath', 'kiss'];
           const nextIndex = (modes.indexOf(mode) + 1) % modes.length;
           setMode(modes[nextIndex]);
         }}
-        className="absolute top-4 right-4 p-2 rounded-xl bg-talia-lavender/10 text-talia-lavender hover:bg-talia-lavender/20 transition-all opacity-0 group-hover:opacity-100 z-10"
+        className="absolute top-6 right-6 p-3 rounded-2xl bg-[#e6d5bc]/30 text-[#8b7355] hover:bg-[#e6d5bc]/50 transition-all opacity-0 group-hover:opacity-100 z-10"
       >
-        <RefreshCw size={16} className={mode !== 'classic' ? 'animate-spin-slow' : ''} />
+        <RefreshCw size={20} className={mode !== 'classic' ? 'animate-spin-slow' : ''} />
       </button>
 
       <motion.div
         animate={mode === 'beats' ? { scale: [1, 1.2, 1] } : { scale: [1, 1.1, 1] }}
         transition={{ repeat: Infinity, duration: mode === 'beats' ? 0.8 : 2 }}
-        className="text-talia-lavender"
+        className="text-[#8b7355] relative z-10"
       >
-        {mode === 'classic' && <Heart fill="currentColor" size={56} />}
-        {mode === 'beats' && <Zap fill="currentColor" size={56} className="text-pink-500" />}
-        {mode === 'breath' && <Sun fill="currentColor" size={56} className="text-amber-400" />}
-        {mode === 'kiss' && <Heart fill="currentColor" size={56} className="text-red-400" />}
+        {mode === 'classic' && <Heart fill="currentColor" size={72} />}
+        {mode === 'beats' && <Zap fill="currentColor" size={72} className="text-pink-500" />}
+        {mode === 'breath' && <Sun fill="currentColor" size={72} className="text-amber-400" />}
+        {mode === 'kiss' && <Heart fill="currentColor" size={72} className="text-red-400" />}
       </motion.div>
       
-      <div className="space-y-1">
-        <h2 className="text-3xl font-serif font-bold text-foreground/80">Мы вместе уже</h2>
-        <p className="text-[10px] text-foreground/30 uppercase tracking-widest font-bold">
+      <div className="space-y-2 relative z-10">
+        <h2 className="text-4xl font-serif font-bold text-[#5c4a33]">Мы вместе уже</h2>
+        <p className="text-[11px] text-[#8b7355]/50 uppercase tracking-[0.3em] font-black">
           {mode === 'classic' ? 'Обычное время' : 'Оригинальный счет'}
         </p>
       </div>
       
-      <div className="w-full px-4 h-20 flex items-center justify-center">
+      <div className="w-full h-24 flex items-center justify-center relative z-10">
         <AnimatePresence mode="wait">
           {mode === 'classic' ? (
             <motion.div 
@@ -108,7 +111,7 @@ export const RelationshipTimer = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="grid grid-cols-4 gap-4 w-full"
+              className="grid grid-cols-4 gap-6 w-full"
             >
               {[
                 { label: 'Дней', value: timeLeft.days },
@@ -118,16 +121,16 @@ export const RelationshipTimer = () => {
               ].map((item) => (
                 <div key={item.label} className="flex flex-col items-center group/item">
                   <div className="relative">
-                    <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-foreground/90 to-foreground/40 leading-none">
+                    <span className="text-5xl font-black tracking-tighter text-[#5c4a33] leading-none">
                       {item.value}
                     </span>
                     <motion.div 
                       initial={{ scaleX: 0 }}
                       whileHover={{ scaleX: 1 }}
-                      className="absolute -bottom-1 left-0 right-0 h-0.5 bg-talia-lavender/30 origin-left transition-transform"
+                      className="absolute -bottom-1 left-0 right-0 h-1 bg-[#e6d5bc] origin-left transition-transform"
                     />
                   </div>
-                  <span className="text-[8px] uppercase font-black tracking-[0.2em] text-foreground/20 mt-2 group-hover/item:text-talia-lavender/40 transition-colors">
+                  <span className="text-[10px] uppercase font-black tracking-[0.25em] text-[#8b7355]/40 mt-3 group-hover/item:text-[#8b7355]/70 transition-colors">
                     {item.label}
                   </span>
                 </div>
@@ -141,16 +144,16 @@ export const RelationshipTimer = () => {
               exit={{ opacity: 0, scale: 1.1 }}
               className="flex flex-col items-center"
             >
-              <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-talia-lavender to-talia-peach">
+              <span className="text-5xl font-black text-[#5c4a33]">
                 {altStats?.value}
               </span>
-              <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-foreground/40 mt-1">
+              <span className="text-[11px] uppercase tracking-[0.25em] font-black text-[#8b7355]/50 mt-2">
                 {altStats?.label}
               </span>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-    </Card>
+    </div>
   );
 };

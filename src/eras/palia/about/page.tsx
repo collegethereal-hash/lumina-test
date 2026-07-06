@@ -128,18 +128,23 @@ const categories = [
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-[#fefce8] pb-32">
-      {/* Paper texture overlay */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] z-50" />
+    <div className="min-h-screen bg-[#fdfaf3] pb-32">
+      {/* Background Decor */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#f0f9ff]/50 via-transparent to-[#fdf2f8]/50" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#0ea5e9]/5 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#ec4899]/5 rounded-full blur-[120px]" />
+      </div>
 
       {/* Hero Section */}
-      <header className="relative h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-[#f5e6d3] border-b-8 border-[#e6d5bc]">
+      <header className="relative h-[40vh] md:h-[50vh] flex items-center justify-center overflow-hidden bg-[#fdfaf3] border-b-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)]">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#5c4a33_1px,transparent_1px)] [background-size:32px_32px]" />
         
         <Link href="/" className="absolute top-8 left-8 z-[60]">
           <motion.button
             whileHover={{ x: -5 }}
-            className="flex items-center gap-2 text-[#8b7355] font-black uppercase text-xs tracking-widest bg-white/50 backdrop-blur-md px-6 py-3 rounded-2xl border-2 border-[#e6d5bc] shadow-sm"
+            className="flex items-center gap-2 text-[#8b7355] font-black uppercase text-xs tracking-widest bg-[#fdfaf3]/50 backdrop-blur-md px-6 py-3 rounded-2xl border-4 border-[#e6d5bc]/30 shadow-sm"
           >
             ← Вернуться
           </motion.button>
@@ -164,7 +169,7 @@ export default function AboutPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 pt-20 relative z-10 space-y-24">
+      <main className="max-w-6xl mx-auto px-4 pt-20 pb-40 md:pb-52 relative z-10 space-y-24">
         {/* Detailed Info Categories */}
         <div className="grid grid-cols-1 gap-12">
           {categories.map((cat, idx) => (
@@ -181,7 +186,7 @@ export default function AboutPage() {
                   <motion.div
                     key={i}
                     whileHover={{ y: -5 }}
-                    className="bg-white p-8 rounded-[3rem] border-4 border-[#e6d5bc] shadow-xl space-y-6 relative overflow-hidden group"
+                    className="bg-[#fdfaf3] p-8 rounded-[3rem] border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] space-y-6 relative overflow-hidden group"
                   >
                     <div className="space-y-3 relative z-10">
                       <h4 className="font-black uppercase text-xs tracking-widest text-[#8b7355]">

@@ -12,8 +12,27 @@ const CATEGORY_COLORS = [
   { bg: 'bg-[#bc7eff]', text: 'text-white', border: 'border-[#bc7eff]', name: 'Фиолетовый' },
 ];
 
+interface SpaceConfig {
+  id: string;
+  name: string;
+  partner1_name: string;
+  partner2_name: string;
+  active_era: string;
+  password_p1: string;
+  password_p2: string;
+}
+
+interface ArchiveMonth {
+  id: string;
+  name: string;
+  year: number;
+  month: number;
+  moments_count: number;
+}
+
 interface DataContextType {
   currentUser: 'Grinch' | 'Cindy' | null;
+  spaceConfig: SpaceConfig | null;
   profiles: any;
   notes: any[];
   moments: any[];
@@ -21,14 +40,24 @@ interface DataContextType {
   archiState: any;
   capsules: any[];
   whispers: any[];
+  archiveMonths: ArchiveMonth[];
+  archiveMoments: any[];
   isLoading: boolean;
+  isNotesLoading: boolean;
+  isMomentsLoading: boolean;
+  isQuestsLoading: boolean;
+  isCapsulesLoading: boolean;
+  isWhispersLoading: boolean;
   setNotes: React.Dispatch<React.SetStateAction<any[]>>;
   setMoments: React.Dispatch<React.SetStateAction<any[]>>;
   setQuests: React.Dispatch<React.SetStateAction<any[]>>;
   setCapsules: React.Dispatch<React.SetStateAction<any[]>>;
   setWhispers: React.Dispatch<React.SetStateAction<any[]>>;
   setArchiState: React.Dispatch<React.SetStateAction<any>>;
+  setArchiveMonths: React.Dispatch<React.SetStateAction<ArchiveMonth[]>>;
+  setArchiveMoments: React.Dispatch<React.SetStateAction<any[]>>;
   refreshAll: () => Promise<void>;
+  refreshSpace: () => Promise<void>;
   refreshProfiles: () => Promise<void>;
   refreshNotes: () => Promise<void>;
   refreshMoments: () => Promise<void>;
@@ -36,16 +65,90 @@ interface DataContextType {
   refreshCapsules: () => Promise<void>;
   refreshArchi: () => Promise<void>;
   refreshWhispers: () => Promise<void>;
+  refreshArchiveMonths: () => Promise<void>;
+  loadArchiveMonth: (year: number, month: number) => Promise<void>;
+  logout: () => void;
+  getCurrentMonthMoments: () => any[];
+  getCurrentMonthNotes: () => any[];
   galleryCategories: string[];
   setGalleryCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  bucketListCategories: string[];
+  setBucketListCategories: React.Dispatch<React.SetStateAction<string[]>>;
   dailyFact: string;
   dailyCookie: string;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+const INTERESTING_FACTS = [
+  "На Венере день длится дольше, чем год — планета вращается вокруг своей оси медленнее, чем облетает Солнце !!",
+  "Грибы технически ближе к животным, чем к растениям. У них даже есть свой аналог иммунной системы ))",
+  "В мире существует библиотека, где книги напечатаны на тончайших листах золота, чтобы они хранились вечно !!",
+  "У Сатурна есть луна Япет, которая наполовину черная как уголь, а наполовину белая как свежий снег ))",
+  "Мед никогда не портится. Археологи находили в египетских гробницах горшки с медом, которому 3000 лет, и он всё еще съедобен !!",
+  "Сердце синего кита размером с автомобиль, а его язык весит столько же, сколько целый слон ))",
+  "На Нептуне и Уране идут дожди из настоящих алмазов из-за огромного давления в атмосфере !!",
+  "Деревья умеют общаться друг с другом через подземную сеть грибницы, передавая питательные вещества и предупреждая об опасности ))",
+  "Человеческий мозг генерирует больше электрических импульсов за один день, чем все телефоны мира вместе взятые !!",
+  "Осьминоги могут пролезть в любое отверстие, которое больше их единственной твердой части тела — клюва ))",
+  "В Антарктиде есть 'Кровавый водопад', вода в котором ярко-красного цвета из-за высокого содержания железа !!",
+  "Колибри — единственные птицы в мире, которые умеют летать задом наперед и зависать в воздухе на месте ))",
+  "Звук извержения вулкана Кракатау в 1883 году был настолько мощным, что его слышали за 5000 километров от него !!",
+  "На Марсе находится самый высокий вулкан в Солнечной системе — Олимп, он в три раза выше Эвереста ))",
+  "У жирафов и людей одинаковое количество шейных позвонков — ровно семь, просто у жирафов они огромные !!",
+  "Свету требуется 8 минут и 20 секунд, чтобы долететь от Солнца до Земли. Мы всегда видим Солнце в прошлом ))",
+  "Морские коньки — единственные существа на планете, у которых потомство вынашивают и рожают самцы !!",
+  "В Тихом океане есть точка Немо — это самое удаленное место от любой суши, ближе всего к ней находятся космонавты с МКС ))",
+  "Если убрать всё пустое пространство из атомов, из которых состоит человечество, все люди поместятся в объем яблока !!",
+  "У кошек есть более 100 различных звуков для общения, в то время как у собак их всего около десяти ))",
+  "В мире больше звезд в видимой вселенной, чем песчинок на всех пляжах нашей планеты Земля !!",
+  "Скорпионы могут обходиться без еды целый год и при этом оставаться полностью активными и опасными ))",
+  "Самый длинный полет курицы в истории длился всего 13 секунд, но это официально зафиксированный рекорд !!",
+  "У бабочек нет желудков, они питаются только жидким нектаром, который сразу превращается в энергию ))",
+  "Каждый раз, когда вы перемешиваете колоду карт, вы создаете комбинацию, которой, скорее всего, никогда не существовало во вселенной !!",
+  "Белые медведи на самом деле черные под своей белой шерстью, а их шерстинки прозрачные и полые внутри ))",
+  "Во время грозы на Земле каждую секунду происходит около 100 ударов молнии в разные точки планеты !!",
+  "Улитки могут восстанавливать свои глаза, если они были повреждены, и у них более 25 000 зубов на языке ))",
+  "В космосе металлы могут 'свариваться' сами по себе без нагрева, если два чистых куска соприкоснутся — это холодная сварка !!",
+  "Твои отпечатки пальцев уникальны, но у коал они настолько похожи на человеческие, что их путали даже эксперты ))"
+];
+
+const FORTUNES = [
+  "Полинка, помни, что я всегда рядом с тобой, в любую минуту и в любой ситуации, ты никогда не будешь одна !!",
+  "Кис, у тебя обязательно всё получится, ты гораздо сильнее и способнее, чем сама иногда думаешь ))",
+  "Полинка, ты самая потрясающая подруга на свете, твоя поддержка и доброта делают этот мир намного лучше !!",
+  "Просто хочу напомнить, что ты невероятно красивая, и твоя улыбка освещает даже самый пасмурный день ))",
+  "Ты замечательная дочь, и твои близкие очень гордятся тем, каким человеком ты выросла !!",
+  "Полинка, ты умничка, твоё трудолюбие и ум всегда ведут тебя к правильным решениям, я в тебя верю !!",
+  "Кис, никогда не сомневайся в себе, потому что ты — настоящее сокровище, и я бесконечно ценю тебя ))",
+  "Твоё доброе сердце — это твоя суперсила, спасибо тебе за то, что ты именно такая, какая есть !!",
+  "Полинка, ты заслуживаешь всего самого лучшего в этом мире, и я сделаю всё, чтобы ты была счастлива ))",
+  "Ты обладаешь удивительным талантом находить красоту в мелочах и дарить радость окружающим тебя людям !!",
+  "Кис, помни, что любая трудность временна, а моя вера в тебя и твои силы — бесконечна ))",
+  "Ты самая заботливая и искренняя, и я каждый день благодарю судьбу за то, что ты есть в моей жизни !!",
+  "Полинка, твоя целеустремленность восхищает меня, ты идешь к своим мечтам, и я всегда поддержу тебя ))",
+  "Ты — воплонение нежности и мудрости, в тебе сочетается столько прекрасных качеств одновременно !!",
+  "Кис, даже если день не задался, помни, что вечером тебя всегда ждет моя поддержка и тепло ))",
+  "Твои глаза светятся добротой, и в них можно увидеть целую вселенную, ты просто волшебная !!",
+  "Полинка, ты очень талантливая, не бойся проявлять себя и показывать миру свои способности ))",
+  "Ты умеешь слушать и понимать как никто другой, это редкий и очень ценный дар, спасибо тебе !!",
+  "Кис, ты моя маленькая победа каждый день, просто знай, что ты — самое дорогое, что у меня есть ))",
+  "Твоя энергия заряжает всех вокруг позитивом, ты как маленькое солнышко, которое греет всех близких !!",
+  "Полинка, ты удивительная личность с невероятно глубоким внутренним миром, я горжусь тобой ))",
+  "Ты всегда находишь правильные слова, чтобы утешить или подбодрить, ты настоящая волшебница !!",
+  "Кис, ты очень сильная духом, и никакие преграды не смогут остановить тебя на пути к счастью ))",
+  "Твоё чувство юмора и твой смех — это лучшее лекарство от любой грусти, никогда не переставай улыбаться !!",
+  "Полинка, ты пример того, какой должна быть идеальная подруга: верной, честной и бесконечно доброй ))",
+  "Ты очень мудрая не по годам, и твои советы всегда помогают найти выход из сложных ситуаций !!",
+  "Кис, ты заслуживаешь того, чтобы каждый твой день был наполнен любовью, заботой и радостью ))",
+  "Твоя открытость и честность — это то, за что я и все твои близкие тебя так сильно любим !!",
+  "Полинка, ты просто умничка, и я не перестану повторять, как сильно я восхищаюсь твоими успехами ))",
+  "Помни, Кис, что для меня ты — целый мир, и я всегда буду оберегать твоё спокойствие и счастье !!"
+];
+
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<'Grinch' | 'Cindy' | null>(null);
+  const [spaceConfig, setSpaceConfig] = useState<SpaceConfig | null>(null);
   const [profiles, setProfiles] = useState<any>({});
   const [notes, setNotes] = useState<any[]>([]);
   const [moments, setMoments] = useState<any[]>([]);
@@ -53,10 +156,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [capsules, setCapsules] = useState<any[]>([]);
   const [whispers, setWhispers] = useState<any[]>([]);
   const [archiState, setArchiState] = useState<any>(null);
+  const [archiveMonths, setArchiveMonths] = useState<ArchiveMonth[]>([]);
+  const [archiveMoments, setArchiveMoments] = useState<any[]>([]);
   const [galleryCategories, setGalleryCategories] = useState<string[]>(['Все', 'Свидания', 'Прогулки', 'Дом', 'Путешествия']);
+  const [bucketListCategories, setBucketListCategories] = useState<string[]>(['Все', 'Общее', 'Путешествие', 'Дом', 'Приключение']);
   const [dailyFact, setDailyFact] = useState("");
   const [dailyCookie, setDailyCookie] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isNotesLoading, setIsNotesLoading] = useState(false);
+  const [isMomentsLoading, setIsMomentsLoading] = useState(false);
+  const [isQuestsLoading, setIsQuestsLoading] = useState(false);
+  const [isCapsulesLoading, setIsCapsulesLoading] = useState(false);
+  const [isWhispersLoading, setIsWhispersLoading] = useState(false);
 
   // Initialize Auth
   useEffect(() => {
@@ -66,217 +177,474 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Update last_active status
+  useEffect(() => {
+    if (!currentUser || !profiles[currentUser]?.realId) return;
+
+    const updatePresence = async () => {
+      const profileId = profiles[currentUser].realId;
+      await supabase
+        .from('profiles')
+        .update({ last_active: new Date().toISOString() })
+        .eq('id', profileId);
+    };
+
+    // Initial update
+    updatePresence();
+
+    // Periodic update every 30 seconds
+    const interval = setInterval(updatePresence, 30000);
+    
+    // Also update on activity
+    const handleActivity = () => {
+      // Throttled update could be better, but for now simple interval is fine
+    };
+    window.addEventListener('mousedown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+    };
+  }, [currentUser, currentUser ? profiles[currentUser]?.realId : null]);
+
+  const refreshSpace = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('spaces')
+      .select('*')
+      .limit(1)
+      .maybeSingle(); // Better than single() if table might be empty
+    
+    if (data) {
+      setSpaceConfig(data);
+    }
+  }, []);
+
   const refreshProfiles = useCallback(async () => {
     const { data } = await supabase.from('profiles').select('*');
     
-    // Default fallback profiles
+    // Default fallback profiles using space config if available
+    const p1Name = spaceConfig?.partner1_name || 'Гринч';
+    const p2Name = spaceConfig?.partner2_name || 'Синди Лу';
+
     const defaultProfiles: any = {
-      Grinch: { id: 'Grinch', name: 'Гринч', status: 'В сети', mood: '🌿', pref: 'Твое описание...', avatarColor: 'bg-talia-lavender', categories: [] },
-      Cindy: { id: 'Cindy', name: 'Синди Лу', status: 'Отдыхает', mood: '✨', pref: 'Её описание...', avatarColor: 'bg-talia-peach', categories: [] }
+      Grinch: { id: 'Grinch', name: p1Name, status: 'В сети', mood: '🌿', pref: 'Твое описание...', avatarColor: 'bg-talia-lavender', categories: [], custom_rewards: [] },
+      Cindy: { id: 'Cindy', name: p2Name, status: 'Отдыхает', mood: '✨', pref: 'Её описание...', avatarColor: 'bg-talia-peach', categories: [], custom_rewards: [] }
     };
 
-    if (data) {
+    if (data && data.length > 0) {
       data.forEach((p: any) => { 
         // Map any existing ID to either Grinch or Cindy
-        const isGrinch = p.id === 'me' || p.id === 'Grinch' || p.id?.toLowerCase() === 'grinch' || p.name === 'Гринч';
+        const isGrinch = p.id === 'me' || p.id === 'Grinch' || p.id?.toLowerCase() === 'grinch' || p.name === p1Name;
         const id = isGrinch ? 'Grinch' : 'Cindy';
         
         defaultProfiles[id] = {
           ...p,
+          realId: p.id,
           id,
           lastActive: p.last_active,
           categories: p.categories || [],
+          custom_rewards: p.custom_rewards || [],
           avatarColor: p.avatar_color || (id === 'Grinch' ? 'bg-talia-lavender' : 'bg-talia-peach')
         }; 
       });
     }
     setProfiles(defaultProfiles);
-  }, []);
+  }, [spaceConfig?.partner1_name, spaceConfig?.partner2_name]);
+
+  const logout = useCallback(async () => {
+    if (currentUser && profiles[currentUser]?.realId) {
+      const profileId = profiles[currentUser].realId;
+      await supabase
+        .from('profiles')
+        .update({ last_active: new Date(0).toISOString() })
+        .eq('id', profileId);
+    }
+    localStorage.removeItem('lumina_auth');
+    document.cookie = 'lumina_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    window.location.href = '/';
+  }, [currentUser, profiles]);
 
   const refreshNotes = useCallback(async () => {
-    const { data } = await supabase
-      .from('journal_notes')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) {
-      setNotes(data.map((n: any) => ({
-        ...n,
-        isLiked: n.is_liked
-      })));
+    if (!spaceConfig?.id) return;
+    setIsNotesLoading(true);
+    try {
+      const { data } = await supabase
+        .from('journal_notes')
+        .select('*')
+        .eq('space_id', spaceConfig.id)
+        .order('created_at', { ascending: false });
+      if (data) {
+        setNotes(data.map((n: any) => ({
+          ...n,
+          isLiked: n.is_liked
+        })));
+      }
+    } finally {
+      setIsNotesLoading(false);
     }
-  }, []);
+  }, [spaceConfig?.id]);
 
   const refreshMoments = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    setIsMomentsLoading(true);
+    try {
+      const { data } = await supabase
+        .from('gallery_moments')
+        .select('*')
+        .eq('space_id', spaceConfig.id);
+      
+      if (data) {
+        setMoments(data.map((m: any) => ({
+          ...m,
+          src: m.image_url,
+          // Гарантируем наличие даты для фильтрации
+          date: m.date || m.created_at 
+        })));
+      }
+    } finally {
+      setIsMomentsLoading(false);
+    }
+  }, [spaceConfig?.id]);
+
+  const refreshQuests = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    setIsQuestsLoading(true);
+    try {
+      const { data } = await supabase
+        .from('bucket_list')
+        .select('*')
+        .eq('space_id', spaceConfig.id)
+        .order('created_at', { ascending: false });
+      if (data) {
+        const p1Name = spaceConfig.partner1_name;
+        const p2Name = spaceConfig.partner2_name;
+        setQuests(data.map((q: any) => ({
+          id: q.id,
+          title: q.title,
+          description: q.description || '',
+          completed: q.is_completed,
+          completedByGrinch: q.completed_by_p1 || false,
+          completedByCindy: q.completed_by_p2 || false,
+          points: q.points,
+          category: q.category,
+          categoryColor: q.category_color || CATEGORY_COLORS[0],
+          proposedBy: q.proposed_by,
+          approvedByPartner: q.approved_by_partner,
+          deleteRequestedBy: q.delete_requested_by,
+          location: q.location,
+          isChecklist: q.is_checklist,
+          checklistItems: q.checklist_items,
+          completedAt: q.completed_at
+        })));
+      }
+    } finally {
+      setIsQuestsLoading(false);
+    }
+  }, [spaceConfig?.id, spaceConfig?.partner1_name, spaceConfig?.partner2_name]);
+
+  const refreshArchi = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    const { data } = await supabase
+      .from('global_state')
+      .select('value')
+      .eq('space_id', spaceConfig.id)
+      .eq('key', 'archi_state')
+      .maybeSingle(); // Use maybeSingle to avoid 406 error if empty
+    if (data) setArchiState(data.value);
+  }, [spaceConfig?.id]);
+
+  const refreshWhispers = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    setIsWhispersLoading(true);
+    try {
+      const { data } = await supabase
+        .from('whisper_history')
+        .select('*')
+        .eq('space_id', spaceConfig.id)
+        .order('created_at', { ascending: false });
+      if (data) setWhispers(data);
+    } finally {
+      setIsWhispersLoading(false);
+    }
+  }, [spaceConfig?.id]);
+
+  const refreshArchiveMonths = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    const { data } = await supabase
+      .from('gallery_moments')
+      .select('date, created_at')
+      .eq('space_id', spaceConfig.id);
+    
+    if (data) {
+      const months = new Map<string, { year: number; month: number; count: number }>();
+      
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const currentDay = now.getDate();
+      
+      let currentPeriodStart;
+      if (currentDay >= 20) {
+        currentPeriodStart = new Date(currentYear, currentMonth, 20);
+      } else {
+        currentPeriodStart = new Date(currentYear, currentMonth - 1, 20);
+      }
+      
+      const currentPeriodStartUTC = Date.UTC(currentPeriodStart.getFullYear(), currentPeriodStart.getMonth(), currentPeriodStart.getDate(), 0, 0, 0);
+
+      data.forEach(moment => {
+        const rawDate = moment.date || moment.created_at;
+        if (!rawDate) return;
+
+        const date = new Date(rawDate);
+        const dateUTC = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+        
+        // Пропускаем фото из текущего 30-дневного периода (они в основной ленте)
+        if (dateUTC >= currentPeriodStartUTC) return;
+
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const key = `${year}-${month}`;
+        
+        const current = months.get(key);
+        if (current) {
+          current.count++;
+        } else {
+          months.set(key, { year, month, count: 1 });
+        }
+      });
+      
+      const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+      
+      const archiveMonthsList: ArchiveMonth[] = Array.from(months.values())
+        .sort((a, b) => {
+          if (a.year !== b.year) return b.year - a.year;
+          return b.month - a.month;
+        })
+        .map((m, index) => ({
+          id: `${m.year}-${m.month}`,
+          name: `${monthNames[m.month]} ${m.year}`,
+          year: m.year,
+          month: m.month,
+          moments_count: m.count
+        }));
+      
+      setArchiveMonths(archiveMonthsList);
+    }
+  }, [spaceConfig?.id]);
+
+  const loadArchiveMonth = useCallback(async (year: number, month: number) => {
+    if (!spaceConfig?.id) return;
+    
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 1);
+    
     const { data } = await supabase
       .from('gallery_moments')
       .select('*')
+      .eq('space_id', spaceConfig.id)
+      .or(`date.gte.${startDate.toISOString()},created_at.gte.${startDate.toISOString()}`)
       .order('created_at', { ascending: false });
+    
     if (data) {
-      setMoments(data.map((m: any) => ({
+      // Дополнительная фильтрация на клиенте для точности месяца
+      const filteredData = data.filter(m => {
+        const d = new Date(m.date || m.created_at);
+        return d >= startDate && d < endDate;
+      });
+
+      setArchiveMoments(filteredData.map((m: any) => ({
         ...m,
         src: m.image_url
       })));
     }
-  }, []);
+  }, [spaceConfig?.id]);
 
-  const refreshQuests = useCallback(async () => {
-    const { data } = await supabase
-      .from('bucket_list')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) {
-      setQuests(data.map((q: any) => ({
-        id: q.id,
-        title: q.title,
-        description: q.description || '',
-        completed: q.is_completed,
-        completedByGrinch: q.completed_by_grinch || false,
-        completedByCindy: q.completed_by_cindy || false,
-        points: q.points,
-        category: q.category,
-        categoryColor: q.category_color || CATEGORY_COLORS[0],
-        proposedBy: q.proposed_by,
-        approvedByPartner: q.approved_by_partner,
-        deleteRequestedBy: q.delete_requested_by,
-        location: q.location
-      })));
+  const getCurrentMonthMoments = useCallback(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    let startDate;
+    if (currentDay >= 20) {
+      startDate = new Date(currentYear, currentMonth, 20);
+    } else {
+      startDate = new Date(currentYear, currentMonth - 1, 20);
     }
-  }, []);
+    
+    const startDateUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0);
+    
+    return moments.filter(m => {
+      const rawDate = m.date || m.created_at;
+      const momentDate = new Date(rawDate);
+      const momentDateUTC = Date.UTC(momentDate.getFullYear(), momentDate.getMonth(), momentDate.getDate(), 0, 0, 0);
+      
+      return momentDateUTC >= startDateUTC;
+    });
+  }, [moments]);
 
-  const refreshArchi = useCallback(async () => {
-    const { data } = await supabase
-      .from('global_state')
-      .select('value')
-      .eq('key', 'archi_state')
-      .single();
-    if (data) setArchiState(data.value);
-  }, []);
+  const getCurrentMonthNotes = useCallback(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    let startDate;
+    if (currentDay >= 20) {
+      startDate = new Date(currentYear, currentMonth, 20);
+    } else {
+      startDate = new Date(currentYear, currentMonth - 1, 20);
+    }
+    
+    const startDateUTC = Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, 0, 0);
+    
+    return notes.filter(n => {
+       // Для заметок используем локальную дату или created_at
+       const rawDate = n.date || n.created_at;
+       if (!rawDate) return false;
 
-  const refreshWhispers = useCallback(async () => {
-    const { data } = await supabase
-      .from('whisper_history')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) setWhispers(data);
-  }, []);
+       // Если это строка YYYY-MM-DD, создаем дату. 
+       // Если это ISO из Supabase, JS тоже поймет.
+       const momentDate = new Date(rawDate);
+       
+       // Сбрасываем в UTC для честного сравнения с startDateUTC
+       const momentDateUTC = Date.UTC(momentDate.getFullYear(), momentDate.getMonth(), momentDate.getDate(), 0, 0, 0);
+       
+       return momentDateUTC >= startDateUTC;
+     });
+  }, [notes]);
 
   const refreshCapsules = useCallback(async () => {
-    const { data } = await supabase
-      .from('time_capsules')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) {
-      setCapsules(data.map((c: any) => ({
-        id: c.id,
-        title: c.title,
-        description: c.description,
-        unlockDate: c.unlock_date,
-        isLocked: c.is_sealed,
-        content: c.content,
-        author: c.author
-      })));
+    if (!spaceConfig?.id) return;
+    setIsCapsulesLoading(true);
+    try {
+      const { data } = await supabase
+        .from('time_capsules')
+        .select('*')
+        .eq('space_id', spaceConfig.id)
+        .order('created_at', { ascending: false });
+      if (data) {
+        setCapsules(data.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          unlockDate: c.unlock_date,
+          isLocked: c.is_sealed,
+          content: c.content,
+          author: c.author
+        })));
+      }
+    } finally {
+      setIsCapsulesLoading(false);
     }
-  }, []);
+  }, [spaceConfig?.id]);
 
   const refreshGalleryCategories = useCallback(async () => {
+    if (!spaceConfig?.id) return;
     const { data } = await supabase
       .from('global_state')
       .select('value')
+      .eq('space_id', spaceConfig.id)
       .eq('key', 'gallery_categories')
-      .single();
+      .maybeSingle(); // Use maybeSingle to avoid 406 error if empty
     if (data && data.value) {
       setGalleryCategories(data.value as string[]);
     }
+  }, [spaceConfig?.id]);
+
+  const refreshBucketListCategories = useCallback(async () => {
+    if (!spaceConfig?.id) return;
+    const { data } = await supabase
+      .from('global_state')
+      .select('value')
+      .eq('space_id', spaceConfig.id)
+      .eq('key', 'bucket_list_categories')
+      .maybeSingle();
+    if (data && data.value) {
+      setBucketListCategories(data.value as string[]);
+    }
+  }, [spaceConfig?.id]);
+
+  // Initialize Data
+  useEffect(() => {
+    // Set initial fact and cookie
+    const hour = new Date().getHours();
+    const day = new Date().getDate();
+    setDailyFact(INTERESTING_FACTS[hour % INTERESTING_FACTS.length]);
+    setDailyCookie(FORTUNES[day % FORTUNES.length]);
+
+    refreshSpace();
+    refreshProfiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const refreshAll = useCallback(async () => {
-    // Only show global loading on the very first load if we have no profile data
-    if (Object.keys(profiles).length === 0) {
-      setIsLoading(true);
+  // Fetch all data when space is ready
+  useEffect(() => {
+    if (spaceConfig?.id) {
+      refreshNotes();
+      refreshMoments();
+      refreshQuests();
+      refreshCapsules();
+      refreshArchi();
+      refreshGalleryCategories();
+      refreshBucketListCategories();
+      refreshWhispers();
+      refreshArchiveMonths(); // Добавляем вызов обновления архива
+      setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceConfig?.id]);
 
-    const facts = [
-      "В Швейцарии незаконно держать только одну морскую свинку. Эти животные так нуждаются в общении, что одиночество считается жестоким обращением. 🐹",
-      "Коалы спят до 22 часов в сутки. Их рацион из эвкалипта настолько беден энергией, что на бодрствование просто не остается сил. 🐨",
-      "Вороны умеют подшучивать друг над другом и даже над другими животными. Они часто дергают собак или кошек за хвосты просто ради забавы. 🐦",
-      "Муравьеды не имеют зубов. Они сцеживают пищу своими мощными желудками, которые буквально перемалывают насекомых, как жернова. 🐜",
-      "В Токио есть кафе, где можно погладить капибар. Эти гигантские грызуны настолько дружелюбны, что ладят абсолютно со всеми животными. 🦦",
-      "Если выбрить тигру шерсть, его кожа все равно останется полосатой. Рисунок на коже полностью повторяет узор шерсти. 🐅",
-      "Сердце синего кита весит около 600 килограммов. Оно настолько огромное, что человек мог бы пролезть через его аорту. 🐋",
-      "Собаки умеют чувствовать запах человеческих эмоций. Они точно знают, когда вам страшно, а когда вы счастливы. 🐕",
-      "У пингвинов есть специальная железа, которая позволяет им пить соленую морскую воду. Она отфильтровывает соль и выводит её через клюв. 🐧",
-      "Пчелы умеют распознавать человеческие лица. Эксперименты показали, что они запоминают черты лица так же, как люди. 🐝",
-      "Бабочки чувствуют вкус своими лапками. Так они проверяют, подходит ли лист растения для того, чтобы отложить на нем яйца. 🦋",
-      "У осьминогов три сердца, а их кровь имеет голубой цвет из-за высокого содержания меди. 🐙",
-      "В космосе нельзя плакать. Из-за отсутствия гравитации слезы не падают вниз, а собираются в маленькие шарики вокруг глаз. 🌌",
-      "В Антарктиде есть водопад с водой красного цвета. Его называют 'Кровавый водопад' из-за большого количества оксида железа. 🩸",
-      "Ленивцы могут задерживать дыхание под водой на 40 минут. Это дольше, чем дельфины! 🦥",
-      "Самцы морских коньков — единственные животные на планете, которые вынашивают и рожают детенышей. 🌊",
-      "Слоны — одни из немногих животных, способных узнавать свое отражение в зеркале, что говорит о высоком уровне их самосознания. 🐘",
-      "Звук, который издает синий кит, громче звука реактивного двигателя. Они могут слышать друг друга на расстоянии до 16 000 километров. 🌊",
-      "В Японии есть остров Окуносима, который полностью населен кроликами. Они совершенно не боятся людей и любят угощения. 🐇",
-      "Кошки мяукают только для общения с людьми. Между собой взрослые кошки общаются звуками, запахами и языком тела. 🐱",
-      "Дельфины дают друг другу имена. Каждый дельфин имеет свой уникальный свист, на который он откликается всю жизнь. 🐬",
-      "Снежные барсы не умеют рычать. Вместо этого они мурлыкают, как домашние кошки, только намного громче. 🐆",
-      "Самое большое живое существо на Земле — это грибница в штате Орегон. Она занимает площадь более 9 квадратных километров. 🍄",
-      "Коровы заводят лучших друзей. Исследования показали, что у них снижается уровень стресса в компании своей 'подружки'. 🐄",
-      "Морские выдры прячут свой любимый камешек в специальном кармашке из кожи под мышкой, чтобы разбивать им раковины. 🦦"
-    ];
-    const cookies = [
-      "Сегодня идеальный день для совместного фильма.",
-      "Твоему партнеру сейчас очень хочется услышать твой голос.",
-      "Маленький подарок без повода — лучший способ сказать 'люблю'.",
-      "Арчи предсказывает вам очень уютный вечер.",
-      "Скоро случится что-то волшебное!"
-    ];
-    
+  const refreshAll = useCallback(async () => {
     // Меняем факт каждый час
     const hour = new Date().getHours();
-    setDailyFact(facts[hour % facts.length]);
+    setDailyFact(INTERESTING_FACTS[hour % INTERESTING_FACTS.length]);
     
     const day = new Date().getDate();
-    setDailyCookie(cookies[day % cookies.length]);
+    setDailyCookie(FORTUNES[day % FORTUNES.length]);
 
-    // Fetch essentials first
+    // Manual refresh
+    await refreshSpace();
     await refreshProfiles();
-    setIsLoading(false);
-
-    // Fetch everything else in the background without blocking the UI
     refreshNotes();
     refreshMoments();
     refreshQuests();
     refreshCapsules();
     refreshArchi();
     refreshGalleryCategories();
+    refreshBucketListCategories();
     refreshWhispers();
-  }, [refreshProfiles, refreshNotes, refreshMoments, refreshQuests, refreshCapsules, refreshArchi, refreshGalleryCategories, refreshWhispers]);
-
-  useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    refreshArchiveMonths(); // И здесь тоже
+  }, [refreshSpace, refreshProfiles, refreshNotes, refreshMoments, refreshQuests, refreshCapsules, refreshArchi, refreshGalleryCategories, refreshBucketListCategories, refreshWhispers, refreshArchiveMonths]);
 
   useEffect(() => {
     if (!currentUser) return;
 
     const updatePresence = async () => {
-      const isGrinch = currentUser.toLowerCase() === 'grinch';
-      const id = isGrinch ? 'Grinch' : 'Cindy';
-      const legacyId = isGrinch ? 'me' : 'polina';
+      if (!spaceConfig?.id || !currentUser) return;
       
-      // Update with upsert for the main ID
-      await supabase
-        .from('profiles')
-        .upsert({ 
-          id: id, 
-          last_active: new Date().toISOString(),
-          name: isGrinch ? 'Гринч' : 'Синди Лу' 
-        }, { onConflict: 'id' });
-        
-      // Also update legacy ID just in case
-      await supabase
-        .from('profiles')
-        .update({ last_active: new Date().toISOString() })
-        .eq('id', legacyId);
+      const id = currentUser.toLowerCase() === 'grinch' ? 'Grinch' : 'Cindy';
+      
+      // Синхронизируем куки для Middleware, если их нет
+      if (!document.cookie.includes('lumina_auth')) {
+        document.cookie = `lumina_auth=${currentUser.toLowerCase()}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
+      }
+      
+      try {
+        await supabase
+          .from('profiles')
+          .upsert({ 
+            id: id, 
+            space_id: spaceConfig.id,
+            last_active: new Date().toISOString(),
+            name: id === 'Grinch' ? (spaceConfig.partner1_name || 'Гринч') : (spaceConfig.partner2_name || 'Синди Лу')
+          }, { onConflict: 'id' });
+      } catch (e) {
+        console.error('Presence Update Error:', e);
+      }
     };
 
     updatePresence();
@@ -289,13 +657,56 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentUser, refreshProfiles]);
 
+  const value = {
+    currentUser,
+    spaceConfig,
+    profiles,
+    notes,
+    moments,
+    quests,
+    archiState,
+    capsules,
+    whispers,
+    archiveMonths,
+    archiveMoments,
+    isLoading,
+    isNotesLoading,
+    isMomentsLoading,
+    isQuestsLoading,
+    isCapsulesLoading,
+    isWhispersLoading,
+    setNotes,
+    setMoments,
+    setQuests,
+    setCapsules,
+    setWhispers,
+    setArchiState,
+    setArchiveMonths,
+    setArchiveMoments,
+    refreshAll,
+    refreshSpace,
+    refreshProfiles,
+    refreshNotes,
+    refreshMoments,
+    refreshQuests,
+    refreshCapsules,
+    refreshArchi,
+    refreshWhispers,
+    refreshArchiveMonths,
+    loadArchiveMonth,
+    logout,
+    getCurrentMonthMoments,
+    getCurrentMonthNotes,
+    galleryCategories,
+    setGalleryCategories,
+    bucketListCategories,
+    setBucketListCategories,
+    dailyFact,
+    dailyCookie,
+  };
+
   return (
-    <DataContext.Provider value={{ 
-      currentUser, profiles, notes, moments, quests, archiState, capsules, whispers, isLoading,
-      galleryCategories, setGalleryCategories, dailyFact, dailyCookie,
-      setNotes, setMoments, setQuests, setArchiState, setCapsules, setWhispers,
-      refreshAll, refreshNotes, refreshMoments, refreshQuests, refreshArchi, refreshProfiles, refreshCapsules, refreshWhispers
-    }}>
+    <DataContext.Provider value={value}>
       {children}
     </DataContext.Provider>
   );

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Skull, Anchor, Lock, ArrowRight, Ship, Sword, Flag } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useData } from '@/components/DataProvider';
 
 type Character = 'grinch' | 'cindy';
 
@@ -12,6 +13,7 @@ interface AuthProps {
 }
 
 export const PirateAuth = ({ onComplete }: AuthProps) => {
+  const { spaceConfig } = useData();
   const [step, setStep] = useState<'character' | 'password'>('character');
   const [selectedChar, setSelectedChar] = useState<Character | null>(null);
   const [password, setPassword] = useState('');
@@ -24,16 +26,28 @@ export const PirateAuth = ({ onComplete }: AuthProps) => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = selectedChar === 'grinch' ? '66658985' : '16032026';
+    if (!spaceConfig) return;
+
+    const correctPassword = selectedChar === 'grinch' ? spaceConfig.password_p1 : spaceConfig.password_p2;
     
     if (password === correctPassword) {
-      if (selectedChar) onComplete(selectedChar);
+      if (selectedChar) {
+        console.log('Login Success for:', selectedChar);
+        // Устанавливаем куку для middleware
+        document.cookie = `lumina_auth=${selectedChar}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
+        onComplete(selectedChar);
+      }
     } else {
+      console.log('Login Failed: Incorrect password');
       setError(true);
       setTimeout(() => setError(false), 500);
       setPassword('');
     }
   };
+
+  const p1Name = spaceConfig?.partner1_name || 'Гринч';
+  const p2Name = spaceConfig?.partner2_name || 'Синди Лу';
+
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#020617] overflow-hidden font-serif">
@@ -75,13 +89,13 @@ export const PirateAuth = ({ onComplete }: AuthProps) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 max-w-4xl mx-auto">
                <PirateCharCard 
-                 name="Синди Лу" 
+                 name={p2Name} 
                  title="Яростная Бестия"
                  onClick={() => handleCharSelect('cindy')}
                  emoji="🏴‍☠️"
                />
                <PirateCharCard 
-                 name="Гринч" 
+                 name={p1Name} 
                  title="Кровавый Капитан"
                  onClick={() => handleCharSelect('grinch')}
                  emoji="🍏"

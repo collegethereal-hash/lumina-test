@@ -1,19 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { Card } from "@/components/Card";
-import { BookOpen, PenTool, Calendar, Heart, MessageCircle, Send, User, Mail, Eraser, Trash2, Edit3, Save, X, Sparkles, Trees, Moon, Flower } from "lucide-react";
+import { BookOpen, PenTool, Calendar, Heart, MessageCircle, Send, User, Eraser, Trash2, Edit3, Save, X, Sparkles, Sparkle, Trees, Moon, Flower, Archive, ArrowLeft, RefreshCw, Reply, Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useData } from '@/components/DataProvider';
+import { PagedText } from '../components/PagedText';
 
 interface Comment {
-  id: number;
+  id: number | string; 
   author: 'Grinch' | 'Cindy';
   text: string;
   date: string;
+  replyTo?: number | string; // id of comment this is replying to
 }
 
 interface Note {
@@ -26,230 +28,558 @@ interface Note {
   likes: number;
   isLiked: boolean;
   liked_by?: string[];
+  read_by?: string[]; // New field to track who read the note
+  comments_read_by?: Record<string, number>; // { 'Grinch': timestamp, 'Cindy': timestamp }
   comments: Comment[];
 }
 
 const INITIAL_NOTES: Note[] = [];
 
+const TEST_NOTES: Note[] = [
+  {
+    id: 'template-unread',
+    title: '✨ Тестовая запись (Непрочитанный комментарий)',
+    content: 'Эта запись создана специально, чтобы ты увидел, как выглядит иконка, когда партнер оставил новый комментарий. Посмотри на значок сообщения внизу справа — он должен быть желтым и закрашенным!',
+    date: 'Сегодня',
+    author: 'Cindy',
+    mood: '🔮',
+    likes: 99,
+    isLiked: false,
+    read_by: ['Cindy', 'Grinch'],
+    comments_read_by: { 'Grinch': 0, 'Cindy': 0 },
+    comments: [
+      { id: 9999999999999, author: 'Grinch', text: 'Этот комментарий помечен как "новый" для Синди!', date: 'Только что' },
+      { id: 9999999999998, author: 'Cindy', text: 'А этот — как "новый" для Гринча!', date: 'Только что' }
+    ]
+  },
+  {
+    id: '1',
+    title: 'Первый день в нашем мире',
+    content: 'Сегодня мы впервые открыли это место. Оно кажется таким уютным и волшебным. Надеюсь, мы наполним его множеством теплых воспоминаний и искренних слов.',
+    date: '15 июня 2026',
+    author: 'Cindy',
+    mood: '🌸',
+    likes: 5,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Grinch', text: 'Полностью согласен! Это наше новое начало. ❤️', date: '15:30' }
+    ]
+  },
+  {
+    id: '2',
+    title: 'Мысли о будущем',
+    content: 'Думая о том, сколько всего мы можем здесь создать... Галерею наших улыбок, журнал наших мыслей. Это очень вдохновляет и заставляет сердце биться чаще.',
+    date: '14 июня 2026',
+    author: 'Grinch',
+    mood: '🌿',
+    likes: 3,
+    isLiked: false,
+    liked_by: ['Cindy'],
+    comments: []
+  },
+  {
+    id: '3',
+    title: 'Просто хороший вечер',
+    content: 'Провели вечер, просто болтая ни о чем и обо всем. Иногда самые простые моменты — самые ценные. Захотелось запечатлеть это чувство здесь, чтобы никогда не забывать.',
+    date: '13 июня 2026',
+    author: 'Cindy',
+    mood: '❤️',
+    likes: 10,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+        { id: 1, author: 'Grinch', text: 'Это был лучший вечер. Спасибо тебе.', date: '22:10' },
+        { id: 2, author: 'Cindy', text: 'Тебе спасибо ✨', date: '22:12' }
+    ]
+  },
+    {
+    id: '4',
+    title: 'Смешной случай в магазине',
+    content: 'Никогда не забуду, как ты сегодня пытался достать ту банку с верхней полки. Это было так забавно и мило! Смеялись до слез. Нужно будет вспоминать это почаще.',
+    date: '12 июня 2026',
+    author: 'Grinch',
+    mood: '🥧',
+    likes: 8,
+    isLiked: false,
+    liked_by: [],
+    comments: []
+  },
+  {
+    id: '5',
+    title: 'Уютный дождливый день',
+    content: 'Сегодня весь день шел дождь, и мы провели его дома, читая книги и слушая музыку. Такие дни особенно ценны, когда можно просто быть рядом и наслаждаться тишиной.',
+    date: '11 июня 2026',
+    author: 'Cindy',
+    mood: '🧸',
+    likes: 7,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Grinch', text: 'Идеальный день. 🌧️', date: '18:00' }
+    ]
+  },
+  {
+    id: '6',
+    title: 'Новые идеи для приключений',
+    content: 'Придумал несколько новых мест, куда мы могли бы отправиться. Мир полон чудес, и я хочу исследовать их все вместе с тобой.',
+    date: '10 июня 2026',
+    author: 'Grinch',
+    mood: '🌿',
+    likes: 4,
+    isLiked: false,
+    liked_by: ['Cindy'],
+    comments: []
+  },
+  {
+    id: '7',
+    title: 'Вкусный ужин',
+    content: 'Приготовила сегодня твое любимое блюдо. Видеть твою улыбку, когда ты ешь, — это лучшая награда. Люблю наши кулинарные эксперименты!',
+    date: '09 июня 2026',
+    author: 'Cindy',
+    mood: '🥧',
+    likes: 12,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Grinch', text: 'Было невероятно вкусно! Ты лучшая! 😋', date: '20:30' }
+    ]
+  },
+  {
+    id: '8',
+    title: 'Прогулка под звездами',
+    content: 'Сегодня ночью звезды были особенно яркими. Мы лежали на траве и просто смотрели в небо, мечтая. Такие моменты навсегда остаются в сердце.',
+    date: '08 июня 2026',
+    author: 'Grinch',
+    mood: '🌸',
+    likes: 9,
+    isLiked: false,
+    liked_by: [],
+    comments: []
+  },
+  {
+    id: '9',
+    title: 'Маленькие радости',
+    content: 'Нашла сегодня в старой книге закладку, которую ты мне подарил. Такие мелочи напоминают о том, как много у нас общего и как сильно я тебя ценю.',
+    date: '07 июня 2026',
+    author: 'Cindy',
+    mood: '🧸',
+    likes: 6,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: []
+  },
+  {
+    id: '10',
+    title: 'Новый фильм',
+    content: 'Посмотрели сегодня тот фильм, который ты так давно хотел. Было здорово разделить с тобой этот момент. Даже если фильм не очень, главное — что мы вместе.',
+    date: '06 июня 2026',
+    author: 'Grinch',
+    mood: '❤️',
+    likes: 11,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Cindy', text: 'Мне понравилось! Особенно твои комментарии 😉', date: '23:00' }
+    ]
+  },
+  {
+    id: '11',
+    title: 'Утренний кофе',
+    content: 'Нет ничего лучше, чем просыпаться рядом с тобой и пить утренний кофе. Это мой любимый ритуал, который делает каждый день особенным.',
+    date: '05 июня 2026',
+    author: 'Cindy',
+    mood: '🌸',
+    likes: 15,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: []
+  },
+  {
+    id: '12',
+    title: 'Планы на выходные',
+    content: 'Думаю о наших планах на выходные. Хочется сделать что-то особенное, что запомнится надолго. Есть идеи?',
+    date: '04 июня 2026',
+    author: 'Grinch',
+    mood: '🌿',
+    likes: 2,
+    isLiked: false,
+    liked_by: [],
+    comments: []
+  },
+  {
+    id: '13',
+    title: 'Спонтанная поездка',
+    content: 'Сегодня решили спонтанно поехать за город. Ветер в волосах, солнце на лице и ты рядом. Что может быть лучше?',
+    date: '03 июня 2026',
+    author: 'Cindy',
+    mood: '❤️',
+    likes: 14,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Grinch', text: 'Это было незабываемо! 🚗💨', date: '17:45' }
+    ]
+  },
+  {
+    id: '14',
+    title: 'Новая книга',
+    content: 'Начал читать новую книгу, которую ты мне посоветовала. Очень интересно! Спасибо за рекомендацию, ты всегда знаешь, что мне понравится.',
+    date: '02 июня 2026',
+    author: 'Grinch',
+    mood: '🧸',
+    likes: 5,
+    isLiked: false,
+    liked_by: ['Cindy'],
+    comments: []
+  },
+  {
+    id: '15',
+    title: 'Просто люблю тебя',
+    content: 'Иногда просто хочется сказать, как сильно я тебя люблю. Каждый день с тобой — это подарок. Спасибо, что ты есть.',
+    date: '01 июня 2026',
+    author: 'Cindy',
+    mood: '🌸',
+    likes: 20,
+    isLiked: true,
+    liked_by: ['Cindy', 'Grinch'],
+    comments: [
+      { id: 1, author: 'Grinch', text: 'И я тебя! ❤️❤️❤️', date: '21:00' },
+      { id: 2, author: 'Cindy', text: '🥰', date: '21:05' }
+    ]
+  },
+  // MAY 2026
+  {
+    id: 'may-1',
+    title: 'Майские прогулки',
+    content: 'Цветущие сады в этом мае просто невероятные. Рад, что мы провели этот день на свежем воздухе.',
+    date: '15 мая 2026',
+    author: 'Grinch',
+    mood: '🌿',
+    likes: 12,
+    isLiked: false,
+    liked_by: [],
+    comments: []
+  },
+  {
+    id: 'may-2',
+    title: 'Пикник у озера',
+    content: 'Твои домашние пироги были просто божественны! Повторим в следующие выходные?',
+    date: '10 мая 2026',
+    author: 'Cindy',
+    mood: '🥧',
+    likes: 18,
+    isLiked: true,
+    liked_by: ['Grinch'],
+    comments: []
+  },
+  // APRIL 2026
+  {
+    id: 'apr-1',
+    title: 'Апрельский дождь',
+    content: 'Весь день сидели дома под одним пледом. Самое уютное воспоминание этой весны.',
+    date: '20 апреля 2026',
+    author: 'Cindy',
+    mood: '🧸',
+    likes: 25,
+    isLiked: true,
+    liked_by: ['Grinch'],
+    comments: []
+  },
+];
+
+
+import { Skeleton } from "@/components/Skeleton";
+import { useEra } from '@/context/EraContext';
+
 function JournalContent() {
-  const { currentUser, notes, setNotes, refreshNotes, refreshWhispers } = useData();
+  const { 
+    currentUser, 
+    spaceConfig, 
+    notes: dataNotes, 
+    setNotes, 
+    refreshNotes, 
+    refreshWhispers, 
+    isLoading, 
+    isNotesLoading,
+    getCurrentMonthNotes // Используем общую функцию
+  } = useData();
+  const { setIsUIHidden } = useEra();
+  const notes = dataNotes;
   const [activeTab, setActiveTab] = useState<'all' | 'Grinch' | 'Cindy'>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'unread' | '3days' | '7days'>('all');
   const [openCommentsId, setOpenCommentsId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   
+  // Comment States
+  const [editingCommentId, setEditingCommentId] = useState<number | string | null>(null);
+  const [editCommentText, setEditCommentText] = useState("");
+  const [replyingToCommentId, setReplyingToCommentId] = useState<number | string | null>(null);
+  
+  // Modal State
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
+
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
+  
+  // Archive State
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [selectedArchiveMonth, setSelectedArchiveMonth] = useState<{ year: number; month: number } | null>(null);
+
   // New Note State
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
-  const [selectedMood, setSelectedMood] = useState("🌿");
+  const [selectedMood, setSelectedMood] = useState("🍄");
+  const [currentWhisperPage, setCurrentWhisperPage] = useState(0);
   
   // Edit State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editMood, setEditMood] = useState("");
+
+  // Pagination states for Modal
+  const [notePage, setNotePage] = useState(0);
+  const [noteTotalPages, setNoteTotalPages] = useState(1);
+  const [commentPage, setCommentPage] = useState(0);
+  const [commentTotalPages, setCommentTotalPages] = useState(1);
+  const noteContentRef = useRef<HTMLDivElement>(null);
+  const commentsContainerRef = useRef<HTMLDivElement>(null);
+
+  const calculatePages = () => {
+    if (noteContentRef.current) {
+      const el = noteContentRef.current;
+      // Даем браузеру время на отрисовку колонок
+      requestAnimationFrame(() => {
+        const total = Math.ceil(el.scrollWidth / el.clientWidth);
+        console.log('Book Navigation Debug:', {
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          totalPages: total
+        });
+        setNoteTotalPages(total || 1);
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (selectedNote) {
+      setNotePage(0);
+      setCommentPage(0);
+      setTimeout(calculatePages, 100);
+      window.addEventListener('resize', calculatePages);
+      return () => window.removeEventListener('resize', calculatePages);
+    }
+  }, [selectedNote]);
+
+  useEffect(() => {
+    if (selectedNote) {
+      setTimeout(calculatePages, 100);
+    }
+  }, [selectedNote?.comments]);
+
+  const scrollNote = (direction: 'next' | 'prev') => {
+    if (!noteContentRef.current) return;
+    const el = noteContentRef.current;
+    const newPage = direction === 'next' 
+      ? Math.min(notePage + 1, noteTotalPages - 1)
+      : Math.max(notePage - 1, 0);
+    
+    setNotePage(newPage);
+    el.scrollTo({
+      left: newPage * el.clientWidth,
+      behavior: 'smooth'
+    });
+  };
+
+  const scrollComments = (direction: 'next' | 'prev') => {
+    if (!commentsContainerRef.current) return;
+    const el = commentsContainerRef.current;
+    const newPage = direction === 'next' 
+      ? Math.min(commentPage + 1, commentTotalPages - 1)
+      : Math.max(commentPage - 1, 0);
+    
+    setCommentPage(newPage);
+    el.scrollTo({
+      left: newPage * el.clientWidth,
+      behavior: 'smooth'
+    });
+  };
   
   const searchParams = useSearchParams();
   
-  // Scratch-off state
-  const [whisperText, setWhisperText] = useState("");
-  const [receivedWhisper, setReceivedWhisper] = useState("");
-  const [isWhisperPreview, setIsWhisperPreview] = useState(false);
-  const [isWhisperModalOpen, setIsWhisperModalOpen] = useState(false);
-  const [isSent, setIsSent] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Hide navbar when note modal is open
+  useEffect(() => {
+    if (selectedNote) {
+      setIsUIHidden(true);
+    } else {
+      setIsUIHidden(false);
+    }
+  }, [selectedNote, setIsUIHidden]);
 
+  // Clean up UI hidden state on unmount
+  useEffect(() => {
+    return () => setIsUIHidden(false);
+  }, [setIsUIHidden]);
+
+  // Emoji Groups State
+  const EMOJI_GROUPS = [
+    ['🍄', '🧸', '☕', '🕯️', '🏠'],
+    ['🌸', '🐱', '🥧', '✨', '🌙'],
+    ['🌿', '🦊', '🦉', '🙄', '🍃'],
+    ['🍰', '🥨', '🥞', '🍯', '🍦'],
+    ['🔮', '💫', '🪐', '🗝️', '📜']
+  ];
+  const [currentEmojiSet, setCurrentEmojiSet] = useState(0);
+
+  const toggleEmojiSet = () => {
+    setCurrentEmojiSet((prev) => (prev + 1) % EMOJI_GROUPS.length);
+  };
+
+  // Helper to parse Russian date string "15 июня 2026" or ISO "2026-06-15"
+  const parseNoteDate = (dateStr: string) => {
+    if (!dateStr) return new Date();
+
+    // 1. Check if it's already YYYY-MM-DD
+    if (dateStr.includes('-')) {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const months: Record<string, number> = {
+      'января': 0, 'февраля': 1, 'марта': 2, 'апреля': 3, 'мая': 4, 'июня': 5,
+      'июля': 6, 'августа': 7, 'сентября': 8, 'октября': 9, 'ноября': 10, 'декабря': 11
+    };
+    
+    // Clean string (remove ' г.' if exists)
+    const cleanStr = dateStr.replace(' г.', '').trim();
+    const parts = cleanStr.split(' ');
+    
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = months[parts[1].toLowerCase()];
+      const year = parseInt(parts[2]);
+      
+      if (!isNaN(day) && month !== undefined && !isNaN(year)) {
+        return new Date(year, month, day);
+      }
+    }
+    return new Date(); // Fallback
+  };
+
+  // Filter notes based on selected month or current month
+  const getDisplayNotes = () => {
+    if (selectedArchiveMonth) {
+      return notes.filter(note => {
+        const date = parseNoteDate(note.date);
+        return date.getFullYear() === selectedArchiveMonth.year && 
+               date.getMonth() === selectedArchiveMonth.month;
+      });
+    }
+    return getCurrentMonthNotes();
+  };
+
+  const getDayAndMonthStats = () => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const todayCount = notes.filter(note => {
+      const noteDate = parseNoteDate(note.date);
+      const noteDateStr = `${noteDate.getFullYear()}-${String(noteDate.getMonth() + 1).padStart(2, '0')}-${String(noteDate.getDate()).padStart(2, '0')}`;
+      return noteDateStr === todayStr;
+    }).length;
+
+    const monthCount = notes.filter(note => {
+      const noteDate = parseNoteDate(note.date);
+      return noteDate.getMonth() === currentMonth && noteDate.getFullYear() === currentYear;
+    }).length;
+
+    return { todayCount, monthCount };
+  };
+
+  const stats = getDayAndMonthStats();
+
+  const getArchiveMonthsList = (notes: any[]) => {
+    const monthsMap = new Map<string, { year: number; month: number; count: number }>();
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDay = now.getDate();
+    
+    let currentPeriodStart;
+    if (currentDay >= 20) {
+      currentPeriodStart = new Date(currentYear, currentMonth, 20);
+    } else {
+      currentPeriodStart = new Date(currentYear, currentMonth - 1, 20);
+    }
+    const currentPeriodStartUTC = Date.UTC(currentPeriodStart.getFullYear(), currentPeriodStart.getMonth(), currentPeriodStart.getDate(), 0, 0, 0);
+
+    notes.forEach(note => {
+      const date = parseNoteDate(note.date);
+      const dateUTC = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
+      
+      // Пропускаем текущий период
+      if (dateUTC >= currentPeriodStartUTC) return;
+      
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const key = `${year}-${month}`;
+      
+      const existing = monthsMap.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        monthsMap.set(key, { year, month, count: 1 });
+      }
+    });
+    
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    
+    return Array.from(monthsMap.values())
+      .sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month)
+      .map(m => ({
+        id: `${m.year}-${m.month}`,
+        name: `${monthNames[m.month]} ${m.year}`,
+        year: m.year,
+        month: m.month,
+        count: m.count
+      }));
+  };
+
+  const monthsForArchive = getArchiveMonthsList(notes);
+  const displayNotes = getDisplayNotes();
+  
   // Body scroll lock
   useEffect(() => {
-    if (isWhisperModalOpen) {
+    if (selectedNote) {
       document.body.classList.add('lock-scroll');
     } else {
       document.body.classList.remove('lock-scroll');
     }
     return () => document.body.classList.remove('lock-scroll');
-  }, [isWhisperModalOpen]);
-  const whisperSectionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const openWhisper = searchParams.get('openWhisper');
-    if (openWhisper === 'true' && currentUser) {
-      setIsWhisperPreview(false);
-      fetchIncomingWhisper();
-    }
-  }, [searchParams, currentUser]);
-
-  const fetchIncomingWhisper = async () => {
-    if (!currentUser) return;
-    const key = currentUser === 'Grinch' ? 'whisper_for_grinch' : 'whisper_for_cindy';
-    console.log('DEBUG Whisper: Fetching for', currentUser, 'using key', key);
-    
-    const { data, error } = await supabase
-      .from('global_state')
-      .select('value')
-      .eq('key', key)
-      .single();
-
-    if (error) {
-      console.log('DEBUG Whisper: Fetch error or empty', error);
-      setReceivedWhisper("В почтовом ящике пока пусто... Ждем письма от любимого человека! ✨");
-    } else if (data && data.value) {
-      console.log('DEBUG Whisper: Received data', data.value);
-      // Handle both old string format and new object format
-      const content = typeof data.value === 'object' ? (data.value as any).text : data.value;
-      setReceivedWhisper(content || "Письмо пустое... Странно! 🌀");
-    }
-    setIsWhisperModalOpen(true);
-  };
-
-  useEffect(() => {
-    if (isWhisperModalOpen && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        // Clear canvas first
-        ctx.globalCompositeOperation = 'source-over';
-        // Fill with scratch-off layer
-        ctx.fillStyle = '#e6d5bc'; // Palia beige/brown
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Add some texture/pattern
-        ctx.strokeStyle = '#d4c2a8';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 60; i++) {
-          ctx.beginPath();
-          ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
-          ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height);
-          ctx.stroke();
-        }
-      }
-    }
-  }, [isWhisperModalOpen]);
-
-  const handleScratch = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-
-    const clientX = ('touches' in e) ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = ('touches' in e) ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
-
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath();
-    ctx.arc(x, y, 40, 0, Math.PI * 2); // Slightly larger brush
-    ctx.fill();
-  };
-
-  const autoErase = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.globalCompositeOperation = 'destination-out';
-    
-    let radius = 0;
-    const maxRadius = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
-    
-    const animate = () => {
-      if (radius < maxRadius) {
-        ctx.beginPath();
-        // Create multiple random points for a more organic "magic" feel
-        for (let i = 0; i < 20; i++) {
-          const rx = Math.random() * canvas.width;
-          const ry = Math.random() * canvas.height;
-          ctx.arc(rx, ry, radius / 5, 0, Math.PI * 2);
-        }
-        ctx.fill();
-        radius += 40;
-        requestAnimationFrame(animate);
-      } else {
-        // Final clear
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-    };
-    
-    animate();
-  };
-
-  const sendWhisper = async () => {
-    if (!whisperText.trim() || !currentUser) return;
-    
-    // Target is the partner
-    const targetKey = currentUser === 'Grinch' ? 'whisper_for_cindy' : 'whisper_for_grinch';
-    const targetName = currentUser === 'Grinch' ? 'Cindy' : 'Grinch';
-    console.log('DEBUG Whisper: Sending from', currentUser, 'to', targetKey);
-    
-    // 1. Send active whisper (for scratch-off)
-    const { error: activeError } = await supabase
-      .from('global_state')
-      .upsert({
-        key: targetKey,
-        value: { text: whisperText }
-      });
-
-    if (activeError) {
-      console.error('DEBUG Whisper: Send error', activeError);
-      alert('Ошибка при отправке письма.');
-    } else {
-      console.log('DEBUG Whisper: Send SUCCESS');
-      // We no longer save to history here. It will be saved when read.
-      setIsSent(true);
-      setTimeout(() => {
-        setIsSent(false);
-        setWhisperText("");
-      }, 3000);
-    }
-  };
-
-  const toggleLike = async (id: string) => {
-    if (!currentUser) return;
-    const note = notes.find(n => n.id === id);
-    if (!note) return;
-
-    const likedBy = note.liked_by || [];
-    const isLiked = likedBy.includes(currentUser);
-    
-    let newLikedBy;
-    if (isLiked) {
-      newLikedBy = likedBy.filter((u: string) => u !== currentUser);
-    } else {
-      newLikedBy = [...likedBy, currentUser];
-    }
-
-    const newLikes = newLikedBy.length;
-    const newIsLiked = !isLiked;
-
-    // Optimistic update
-    setNotes(notes.map(n => n.id === id ? { 
-      ...n, 
-      liked_by: newLikedBy, 
-      isLiked: newIsLiked, 
-      likes: newLikes 
-    } : n));
-
-    const { error } = await supabase
-      .from('journal_notes')
-      .update({ liked_by: newLikedBy, likes: newLikes })
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error toggling like:', error);
-      refreshNotes();
-    }
-  };
+  }, [selectedNote]);
 
   const addComment = async (noteId: string) => {
     if (!commentText.trim() || !currentUser) return;
-    
+
     const note = notes.find(n => n.id === noteId);
-    if (!note) return;
+    if (!note) {
+      console.error('Note not found:', noteId);
+      return;
+    }
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -257,74 +587,162 @@ function JournalContent() {
       id: Date.now(),
       author: currentUser,
       text: commentText,
-      date: `${timeStr}`
+      date: `${timeStr}`,
+      replyTo: replyingToCommentId || undefined
     };
 
     const newComments = [...note.comments, newComment];
+    const updatedNotes = notes.map(n => n.id === noteId ? { ...n, comments: newComments } : n);
 
-    // Optimistic update
-    setNotes(notes.map(n => n.id === noteId ? { ...n, comments: newComments } : n));
+    setNotes(updatedNotes);
 
-    const { error } = await supabase
-      .from('journal_notes')
-      .update({ comments: newComments })
-      .eq('id', noteId);
-
-    if (error) {
-      console.error('Error adding comment:', error);
-      // Revert on error
-      refreshNotes();
-    }
+    // Reset input immediately for better UX
     setCommentText("");
+    setReplyingToCommentId(null);
+
+    // Sync to Supabase
+    try {
+      const { error } = await supabase
+        .from('journal_notes')
+        .update({ comments: newComments })
+        .eq('id', noteId);
+
+      if (error) {
+        console.error('Error adding comment to Supabase:', error);
+      }
+    } catch (err) {
+      console.error('Unexpected error adding comment:', err);
+    }
+  };
+  
+  const deleteComment = async (noteId: string, commentId: number | string) => {
+    if (!currentUser) return;
+    const note = notes.find(n => n.id === noteId);
+    if (!note) {
+      console.error('Note not found for deletion:', noteId);
+      return;
+    }
+    
+    const newComments = note.comments.filter((c: any) => c.id !== commentId);
+    const updatedNotes = notes.map(n => n.id === noteId ? { ...n, comments: newComments } : n);
+    
+    localStorage.setItem('lumina_local_notes', JSON.stringify(updatedNotes));
+    setNotes(updatedNotes);
+    
+    try {
+      const { error } = await supabase
+        .from('journal_notes')
+        .update({ comments: newComments })
+        .eq('id', noteId);
+        
+      if (error) {
+        console.error('Error deleting comment from Supabase:', error.message, error.details);
+      }
+    } catch (err) {
+      console.error('Unexpected error in deleteComment:', err);
+    }
+  };
+  
+  const editComment = async (noteId: string, commentId: number | string) => {
+    if (!currentUser || !editCommentText.trim()) return;
+    const note = notes.find(n => n.id === noteId);
+    if (!note) {
+      console.error('Note not found for editing:', noteId);
+      return;
+    }
+    
+    const newComments = note.comments.map((c: any) => c.id === commentId ? { ...c, text: editCommentText } : c);
+    const updatedNotes = notes.map(n => n.id === noteId ? { ...n, comments: newComments } : n);
+    
+    localStorage.setItem('lumina_local_notes', JSON.stringify(updatedNotes));
+    setNotes(updatedNotes);
+
+    // Update selectedNote immediately for UI sync
+    if (selectedNote && selectedNote.id === noteId) {
+      setSelectedNote({ ...selectedNote, comments: newComments });
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('journal_notes')
+        .update({ comments: newComments })
+        .eq('id', noteId);
+        
+      if (error) {
+        console.error('Error editing comment in Supabase:', error.message, error.details);
+      }
+    } catch (err) {
+      console.error('Unexpected error in editComment:', err);
+    }
+    
+    setEditingCommentId(null);
+    setEditCommentText("");
   };
 
   const addNote = async () => {
-    if (!newNoteTitle.trim() || !newNoteContent.trim() || !currentUser) return;
+    if (!newNoteTitle.trim() || !newNoteContent.trim() || !currentUser || !spaceConfig?.id) return;
     
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    // Используем локальную дату YYYY-MM-DD для надежной фильтрации
+    const localDate = new Date();
+    const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
     
-    const newNote = {
-      title: newNoteTitle,
-      content: newNoteContent,
-      date: dateStr,
-      author: currentUser,
-      mood: selectedMood,
-      likes: 0,
-      liked_by: [],
-      comments: []
-    };
+    // Для отображения (если нужно оставить старый формат) можно использовать отдельное поле, 
+    // но в базе лучше хранить стандарт.
     
-    const { data, error } = await supabase
-      .from('journal_notes')
-      .insert([newNote])
-      .select()
-      .single();
+    // 1. Insert to Supabase first to get the real ID
+    try {
+      const { data, error } = await supabase
+        .from('journal_notes')
+        .insert([{
+          title: newNoteTitle,
+          content: newNoteContent,
+          date: dateStr, // Теперь здесь всегда YYYY-MM-DD
+          author: currentUser,
+          mood: selectedMood,
+          likes: 0,
+          liked_by: [],
+          read_by: [currentUser], // Author has read their own note
+          comments: [],
+          space_id: spaceConfig.id // Added space_id
+        }])
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error adding note:', error);
-    } else if (data) {
-      const mappedNote = {
-        ...data,
-        isLiked: (data.liked_by || []).includes(currentUser)
-      };
-      setNotes([mappedNote, ...notes]);
-      setNewNoteTitle("");
-      setNewNoteContent("");
-      setSelectedMood(currentUser === 'Grinch' ? '🌿' : '🌸');
+      if (error) {
+        console.error('Error adding note to Supabase:', error);
+        alert('Не удалось сохранить запись в облаке. Проверьте подключение.');
+        return;
+      }
+
+      if (data) {
+        // 2. Update local state with the returned note (with real ID)
+        const updatedNotes = [data, ...notes];
+        
+        // Update local storage
+        localStorage.setItem('lumina_local_notes', JSON.stringify(updatedNotes));
+        setNotes(updatedNotes);
+        
+        setNewNoteTitle("");
+        setNewNoteContent("");
+        setSelectedMood(currentUser === 'Grinch' ? '🍄' : '🧸');
+      }
+    } catch (err) {
+      console.error('Unexpected error in addNote:', err);
     }
   };
 
   const deleteNote = async (id: string) => {
+    const updatedNotes = notes.filter(n => n.id !== id);
+    
+    setNotes(updatedNotes);
+
     const { error } = await supabase
       .from('journal_notes')
       .delete()
       .eq('id', id);
 
     if (error) {
-      console.error('Error deleting note:', error);
-    } else {
-      setNotes(notes.filter(n => n.id !== id));
+      console.error('Error deleting note from Supabase:', error);
     }
   };
 
@@ -332,7 +750,7 @@ function JournalContent() {
     setEditingId(note.id);
     setEditTitle(note.title);
     setEditContent(note.content);
-    setEditMood(note.mood || (note.author === 'Grinch' ? "🌿" : "🌸"));
+    setEditMood(note.mood || (note.author === 'Grinch' ? "🍄" : "🧸"));
   };
 
   const cancelEditing = () => {
@@ -345,408 +763,1120 @@ function JournalContent() {
   const updateNote = async () => {
     if (!editTitle.trim() || !editContent.trim() || !editingId) return;
     
-    const { error } = await supabase
-      .from('journal_notes')
-      .update({
-        title: editTitle,
-        content: editContent,
-        mood: editMood
-      })
-      .eq('id', editingId);
+    let updatedSelectedNote: Note | null = null;
+    const updatedNotes = notes.map(n => {
+      if (n.id === editingId) {
+        const updated = {
+          ...n,
+          title: editTitle,
+          content: editContent,
+          mood: editMood
+        };
+        updatedSelectedNote = updated;
+        return updated;
+      }
+      return n;
+    });
 
-    if (error) {
-      console.error('Error updating note:', error);
-    } else {
-      setNotes(notes.map(n => {
-        if (n.id === editingId) {
-          return {
-            ...n,
-            title: editTitle,
-            content: editContent,
-            mood: editMood
-          };
-        }
-        return n;
-      }));
-      cancelEditing();
+    setNotes(updatedNotes);
+    if (updatedSelectedNote) {
+      setSelectedNote(updatedSelectedNote);
+    }
+
+    try {
+      const { error } = await supabase
+        .from('journal_notes')
+        .update({
+          title: editTitle,
+          content: editContent,
+          mood: editMood
+        })
+        .eq('id', editingId);
+
+      if (error) {
+        console.error('Error updating note in Supabase:', error.message, error.details);
+      }
+    } catch (err) {
+      console.error('Unexpected error in updateNote:', err);
+    }
+    cancelEditing();
+  };
+
+  const markAsRead = async (noteId: string) => {
+    if (!currentUser) return;
+    
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    
+    // Check if already read by current user
+    if (note.read_by?.includes(currentUser)) return;
+    
+    const updatedReadBy = [...(note.read_by || []), currentUser];
+    
+    try {
+      await supabase
+        .from('journal_notes')
+        .update({ read_by: updatedReadBy })
+        .eq('id', noteId);
+        
+      // Update local state ONLY after success or in a way that doesn't trigger loop
+      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, read_by: updatedReadBy } : n));
+    } catch (err) {
+      console.error('Error marking note as read:', err);
     }
   };
 
-  const scrollToWhisper = () => {
-    whisperSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const markCommentsAsRead = async (noteId: string) => {
+    if (!currentUser) return;
+    
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    
+    // Only update if there are actually unread comments
+    const partnerComments = note.comments.filter((c: any) => c.author !== currentUser);
+    const lastRead = (note.comments_read_by || {})[currentUser] || 0;
+    const hasUnread = partnerComments.some((c: any) => Number(c.id) > lastRead);
+    
+    if (!hasUnread) return;
+
+    const now = Date.now();
+    const updatedReadBy = { ...(note.comments_read_by || {}), [currentUser]: now };
+    
+    try {
+      await supabase
+        .from('journal_notes')
+        .update({ comments_read_by: updatedReadBy })
+        .eq('id', noteId);
+        
+      // Update local state ONLY after success
+      setNotes(prev => prev.map(n => n.id === noteId ? { ...n, comments_read_by: updatedReadBy } : n));
+      
+      const updatedLocalNotes = notes.map(n => n.id === noteId ? { ...n, comments_read_by: updatedReadBy } : n);
+      localStorage.setItem('lumina_local_notes', JSON.stringify(updatedLocalNotes));
+    } catch (err) {
+      console.error('Error marking comments as read:', err);
+    }
   };
 
-  const filteredNotes = notes.filter(n => {
-    if (activeTab === 'Grinch') return n.author === 'Grinch';
-    if (activeTab === 'Cindy') return n.author === 'Cindy';
+  // Sync selectedNote with notes array
+  useEffect(() => {
+    if (selectedNote) {
+      const updatedNote = notes.find(n => n.id === selectedNote.id);
+      if (updatedNote) {
+        // Only update selectedNote if there's a real change to avoid infinite loops
+        if (updatedNote.comments.length !== selectedNote.comments.length || 
+            updatedNote.likes !== selectedNote.likes ||
+            JSON.stringify(updatedNote.comments_read_by) !== JSON.stringify(selectedNote.comments_read_by)) {
+          setSelectedNote(updatedNote);
+        }
+      }
+    }
+  }, [notes, selectedNote]);
+
+  // Separate effect for marking as read to avoid logic soup
+  useEffect(() => {
+    if (selectedNote) {
+      markAsRead(selectedNote.id);
+      markCommentsAsRead(selectedNote.id);
+    }
+  }, [selectedNote?.id]); // Only trigger when ID changes
+
+  // Add a helper to force clear all unread comments in the current view
+  const clearAllUnread = () => {
+    if (!currentUser) return;
+    const now = Date.now();
+    const updatedNotes = notes.map(note => {
+      const partnerComments = note.comments.filter((c: any) => c.author !== currentUser);
+      if (partnerComments.length > 0) {
+        return {
+          ...note,
+          comments_read_by: { ...(note.comments_read_by || {}), [currentUser]: now }
+        };
+      }
+      return note;
+    });
+    setNotes(updatedNotes);
+    localStorage.setItem('lumina_local_notes', JSON.stringify(updatedNotes));
+  };
+
+  useEffect(() => {
+    // One-time force clear on load to fix stuck yellow icons
+    clearAllUnread();
+  }, []);
+
+  const toggleLike = async (noteId: string) => {
+    if (!currentUser) return;
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+
+    // Бесконечные лайки: всегда увеличиваем на 1, убирать нельзя
+    const newLikes = (note.likes || 0) + 1;
+    
+    const updatedNotes = notes.map(n => n.id === noteId ? { 
+      ...n, 
+      likes: newLikes,
+      isLiked: true 
+    } : n);
+
+    setNotes(updatedNotes);
+
+    try {
+      const { error } = await supabase
+        .from('journal_notes')
+        .update({ 
+          likes: newLikes
+        })
+        .eq('id', noteId);
+
+      if (error) {
+        console.error('Error adding like in Supabase:', error.message, error.details);
+      }
+    } catch (err) {
+      console.error('Unexpected error in toggleLike:', err);
+    }
+  };
+
+  const filteredNotes = displayNotes.filter(n => {
+    // Filter by author
+    const authorMatch = activeTab === 'all' || n.author === activeTab;
+    if (!authorMatch) return false;
+
+    // Filter by time/status
+    if (timeFilter === 'all') return true;
+    
+    if (timeFilter === 'unread') {
+      return !n.read_by?.includes(currentUser || '');
+    }
+
+    const noteDate = parseNoteDate(n.date);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - noteDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (timeFilter === '3days') return diffDays <= 3;
+    if (timeFilter === '7days') return diffDays <= 7;
+
     return true;
   });
 
   const leftNotes = filteredNotes.filter((_, idx) => idx % 2 === 0);
   const rightNotes = filteredNotes.filter((_, idx) => idx % 2 !== 0);
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 pt-12 pb-32 space-y-12 relative">
-      {/* Paper texture overlay */}
-      <div className="fixed inset-0 pointer-events-none opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] z-0" />
+  const currentMonthName = () => {
+    const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+    if (selectedArchiveMonth) {
+      return `${monthNames[selectedArchiveMonth.month]} ${selectedArchiveMonth.year}`;
+    }
+    return `${monthNames[new Date().getMonth()]} ${new Date().getFullYear()}`;
+  };
 
-      {/* Magic Header */}
-      <header className="text-center space-y-6 relative z-10">
-        <div className="flex items-center justify-center gap-6 mb-2">
-          <div className="h-[2px] w-12 bg-gradient-to-r from-transparent to-[#e6d5bc]" />
-          <div className="text-[#e6d5bc]">
-            <Sparkles size={24} />
+  return (
+    <div className="relative min-h-screen bg-[#fdfaf3]">
+      {/* Background Decor from Gallery */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#f0f9ff]/50 via-transparent to-[#fdf2f8]/50" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#0ea5e9]/5 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#ec4899]/5 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-20 pb-40 md:pb-52 space-y-6 md:space-y-12 relative z-10">
+        
+        {/* Mobile Header (Hidden on Desktop) */}
+        <div className="md:hidden flex flex-col gap-4">
+          <div className="text-center space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#5c4a33] text-[#fdfaf3] text-[9px] font-bold uppercase tracking-widest shadow-md">
+              <BookOpen size={10} />
+              {selectedArchiveMonth ? 'Архив' : 'Наша летопись'} — {currentMonthName()}
+            </div>
+            <h1 className="text-4xl font-serif font-bold text-[#5c4a33] tracking-tight">
+              {selectedArchiveMonth ? 'Страницы прошлого' : 'Страницы истории'}
+            </h1>
           </div>
-          <div className="h-[2px] w-12 bg-gradient-to-l from-transparent to-[#e6d5bc]" />
+          
+          <div className="flex gap-2">
+            {selectedArchiveMonth ? (
+              <button
+                onClick={() => setSelectedArchiveMonth(null)}
+                className="flex-1 flex items-center justify-center gap-2 bg-[#e6d5bc] border-4 border-[#8b7355]/20 px-4 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-sm text-[#5c4a33] active:scale-95 transition-transform">
+                <ArrowLeft size={16} />
+                Назад
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsArchiveOpen(true)}
+                className="flex-1 flex items-center justify-center gap-2 bg-[#e6d5bc] border-4 border-[#8b7355]/20 px-4 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-sm text-[#5c4a33] active:scale-95 transition-transform">
+                <Archive size={16} />
+                Архив
+              </button>
+            )}
+            
+            <div className="flex-[2] bg-[#fdfaf3] px-4 py-3 rounded-[1.5rem] border-4 border-[#e6d5bc]/30 shadow-sm flex items-center justify-around relative overflow-hidden">
+              <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+              <div className="flex items-center gap-2 relative z-10">
+                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center text-[#5c4a33] shadow-sm border-2 border-[#e6d5bc]">
+                  <BookOpen size={16} />
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-[8px] font-black uppercase text-[#8b7355] tracking-widest">
+                    В месяце
+                  </p>
+                  <p className="text-sm font-bold text-[#5c4a33] whitespace-nowrap">{stats.monthCount} зап.</p>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-[#e6d5bc] relative z-10 mx-2" />
+              <div className="flex flex-col items-center relative z-10">
+                <p className="text-[8px] font-black uppercase text-[#8b7355] tracking-widest">Сегодня</p>
+                <p className="text-sm font-bold text-[#5c4a33]">+{stats.todayCount}</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <h1 className="text-5xl md:text-8xl font-serif font-black text-[#5c4a33] tracking-tight drop-shadow-sm">Походный Дневник</h1>
-        <div className="flex items-center justify-center gap-4 text-[#8b7355] italic font-serif text-xl font-medium">
-          <Flower size={18} />
-          <span>Каждая страница — это шаг нашей общей истории</span>
-          <Flower size={18} />
-        </div>
-      </header>
+
+        {/* Desktop Header Section (Hidden on Mobile) */}
+        <header className="hidden md:flex flex-col md:flex-row gap-6 items-start md:items-end justify-between">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#5c4a33] text-[#fdfaf3] text-[10px] font-bold uppercase tracking-widest shadow-md">
+              <BookOpen size={12} />
+              {selectedArchiveMonth ? 'Архив' : 'Наша летопись'} — {currentMonthName()}
+            </div>
+            <h1 className="text-5xl md:text-6xl font-serif font-bold text-[#5c4a33] tracking-tight">
+              {selectedArchiveMonth ? 'Страницы прошлого' : 'Страницы истории'}
+            </h1>
+            <p className="text-[#8b7355] italic text-lg max-w-xl">
+                {selectedArchiveMonth 
+                  ? "Каждое слово из прошлого согревает настоящее."
+                  : "Каждая запись — это шаг нашей общей истории."}
+              </p>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full md:w-auto">
+            {/* Archive Button - Moved back to right, near the card */}
+            <div className="shrink-0">
+              {selectedArchiveMonth ? (
+                <button
+                  onClick={() => setSelectedArchiveMonth(null)}
+                  className="w-full md:w-48 flex items-center justify-center gap-2 bg-[#e6d5bc] border-8 border-[#8b7355]/20 px-6 py-7 rounded-[2.5rem] text-sm font-black uppercase tracking-widest shadow-[15px_15px_40px_rgba(0,0,0,0.08)] hover:scale-105 transition-all text-[#5c4a33] group active:scale-95 relative overflow-hidden">
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+                  <ArrowLeft size={18} className="text-[#5c4a33] group-hover:-translate-x-1 transition-transform relative z-10" />
+                  <span className="relative z-10">Вернуться</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsArchiveOpen(true)}
+                  className="w-full md:w-48 flex items-center justify-center gap-2 bg-[#e6d5bc] border-8 border-[#8b7355]/20 px-6 py-7 rounded-[2.5rem] text-sm font-black uppercase tracking-widest shadow-[15px_15px_40px_rgba(0,0,0,0.08)] hover:scale-105 transition-all text-[#5c4a33] group active:scale-95 relative overflow-hidden">
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+                  <Archive size={18} className="text-[#5c4a33] group-hover:rotate-12 transition-transform relative z-10" />
+                  <span className="relative z-10">Архив</span>
+                </button>
+              )}
+            </div>
+
+            <div className="bg-[#fdfaf3] py-7 px-8 rounded-[2.5rem] border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] flex items-center justify-around relative overflow-hidden md:min-w-[360px] flex-1 md:flex-none">
+              <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#5c4a33] shadow-sm border-4 border-[#e6d5bc]">
+                  <BookOpen size={24} />
+                </div>
+                <div className="flex flex-col items-center">
+                  <p className="text-[10px] font-black uppercase text-[#8b7355] tracking-widest">
+                    В этом месяце
+                  </p>
+                  <p className="text-2xl font-bold text-[#5c4a33] whitespace-nowrap">{stats.monthCount} записей</p>
+                </div>
+              </div>
+              <div className="h-12 w-px bg-[#e6d5bc] relative z-10 mx-6" />
+              <div className="flex flex-col items-center relative z-10">
+                <p className="text-[10px] font-black uppercase text-[#8b7355] tracking-widest">Сегодня</p>
+                <p className="text-2xl font-bold text-[#5c4a33]">+{stats.todayCount}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+      {/* Archive Selection Panel */}
+      <AnimatePresence>
+        {isArchiveOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden bg-[#fdfaf3] rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] p-5 md:p-8 space-y-4 md:space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl md:text-2xl font-serif font-bold text-[#5c4a33] flex items-center gap-2 md:gap-3">
+                <Archive className="text-[#8b7355] w-5 h-5 md:w-6 md:h-6" />
+                Архив нашей истории
+              </h3>
+              <button 
+                onClick={() => setIsArchiveOpen(false)}
+                className="p-2 rounded-xl hover:bg-[#f5e6d3] transition-colors"
+              >
+                <X className="text-[#8b7355] w-5 h-5 md:w-6 md:h-6" />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+              {monthsForArchive.length > 0 ? (
+                monthsForArchive.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      setSelectedArchiveMonth({ year: m.year, month: m.month });
+                      setIsArchiveOpen(false);
+                    }}
+                    className="flex flex-col items-center gap-1.5 md:gap-2 p-4 md:p-6 rounded-[1.25rem] md:rounded-2xl bg-white border-2 md:border-4 border-[#e6d5bc] hover:border-[#5c4a33] hover:scale-105 transition-all shadow-sm group"
+                  >
+                    <Calendar className="text-[#8b7355] group-hover:text-[#5c4a33] w-5 h-5 md:w-6 md:h-6" />
+                    <span className="text-[10px] md:text-xs font-bold text-[#5c4a33] text-center">{m.name}</span>
+                    <span className="text-[9px] md:text-[10px] font-black uppercase text-[#8b7355]/60 tracking-widest">{m.count} зап.</span>
+                  </button>
+                ))
+              ) : (
+                <div className="col-span-full py-10 text-center text-[#8b7355] italic">
+                  Архив пока пуст... История только начинается!
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Editor, Tabs & Timeline */}
-      <div className="space-y-16 relative z-10">
-        {/* Filter Tabs - Wooden Panel Style */}
-        <div className="max-w-md mx-auto">
-          <div className="flex p-3 bg-[#e6d5bc] rounded-[2.5rem] border-4 border-[#c4a484] shadow-2xl relative overflow-hidden">
-            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] pointer-events-none" />
-            {(['all', 'Grinch', 'Cindy'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab as any)}
-                className={cn(
-                  "flex-1 py-4 rounded-[2rem] text-xs font-black uppercase tracking-[0.2em] transition-all relative z-10",
-                  activeTab === tab 
-                    ? "bg-[#5c4a33] text-white shadow-xl scale-105" 
-                    : "text-[#5c4a33]/60 hover:text-[#5c4a33] hover:bg-white/20"
-                )}
-              >
-                {tab === 'all' ? 'Все Свитки' : tab === 'Grinch' ? 'Гринч' : 'Синди Лу'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="columns-1 md:columns-2 gap-10 space-y-10 relative">
-          {/* New Note Editor - Writing Desk Style */}
-          <div className="break-inside-avoid mb-10">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="w-full"
-            >
-              <Card className="p-0 overflow-hidden border-4 border-[#e6d5bc] shadow-2xl bg-[#fdfaf3] rounded-[3rem] relative">
-                {/* Desk Texture */}
-                <div className="absolute inset-0 opacity-[0.02] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none" />
+      <div className="space-y-12 md:space-y-16 relative z-10">
+        {/* Toolbar (replaces old tabs) & New Note Editor */}
+        {!selectedArchiveMonth && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-10">
+            
+            {/* Left Side: Editor */}
+            <div className="lg:col-span-2">
+              <div className="bg-[#fdfaf3] p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] relative overflow-hidden h-full flex flex-col justify-between">
+                <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
                 
-                <div className="p-8 bg-[#f5e6d3] border-b-4 border-[#e6d5bc] flex flex-col items-start justify-between gap-6 relative z-10">
-                  <div className="flex items-center justify-between w-full">
-                    <h3 className="font-serif font-black text-2xl text-[#5c4a33] flex items-center gap-3">
-                      <PenTool size={24} className="text-[#5c4a33]" />
-                      Новая Запись
-                    </h3>
-                    <div className="text-[#8b7355]/40">
-                      <Sparkles size={20} />
+                <div className="relative z-10 flex flex-col h-full">
+                  <h3 className="font-serif font-black text-2xl md:text-3xl text-[#5c4a33] flex items-center gap-3 md:gap-4 mb-6">
+                    <PenTool className="text-[#8b7355] w-6 h-6 md:w-7 md:h-7" />
+                    Оставить новую запись
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355] ml-4">Заголовок</label>
+                      <input 
+                        type="text" 
+                        value={newNoteTitle}
+                        onChange={(e) => setNewNoteTitle(e.target.value)}
+                        placeholder="О чем ты думаешь?.." 
+                        className="w-full bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] px-4 md:px-6 py-3 md:py-4 focus:ring-0 focus:border-[#5c4a33] transition-all font-serif font-bold text-base md:text-lg placeholder:text-[#8b7355]/40 text-[#5c4a33] shadow-inner"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between ml-4">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355]">Настроение</label>
+                        <button 
+                          onClick={toggleEmojiSet}
+                          className="text-[9px] font-black uppercase tracking-widest text-[#5c4a33]/40 hover:text-[#5c4a33] transition-colors flex items-center gap-1 group"
+                        >
+                          <RefreshCw size={10} className="group-active:rotate-180 transition-transform duration-500" />
+                          Сменить
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 md:gap-3 bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] p-2 md:p-2.5 shadow-inner">
+                        {EMOJI_GROUPS[currentEmojiSet].map(m => (
+                          <button 
+                            key={m} 
+                            onClick={() => setSelectedMood(m)}
+                            className={cn(
+                              "flex-1 h-10 md:h-12 rounded-xl flex items-center justify-center transition-all text-xl md:text-2xl",
+                              selectedMood === m 
+                                ? (currentUser === 'Grinch' 
+                                    ? "bg-[#0ea5e9] text-white scale-105 shadow-[0_10px_20px_rgba(14,165,233,0.3)]" 
+                                    : "bg-[#ec4899] text-white scale-105 shadow-[0_10px_20px_rgba(236,72,153,0.3)]")
+                                : "bg-transparent text-[#8b7355] hover:bg-[#f5e6d3]"
+                            )}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-3">
-                    {['🌿', '🌸', '🥧', '🧸', '❤️'].map(m => (
-                      <button 
-                        key={m} 
-                        onClick={() => setSelectedMood(m)}
-                        className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center transition-all text-2xl border-4 shadow-md",
-                          selectedMood === m 
-                            ? "bg-[#5c4a33] border-[#5c4a33] text-white scale-110 -rotate-3" 
-                            : "bg-white border-[#e6d5bc] hover:bg-[#fdfaf3] hover:-translate-y-1"
-                        )}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="p-10 space-y-8 relative z-10">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355] ml-4">Заголовок Свитка</label>
-                    <input 
-                      type="text" 
-                      value={newNoteTitle}
-                      onChange={(e) => setNewNoteTitle(e.target.value)}
-                      placeholder="О чем ты думаешь?.." 
-                      className="w-full bg-white border-4 border-[#e6d5bc] rounded-2xl px-8 py-5 focus:ring-0 focus:border-[#5c4a33] transition-all font-serif font-black text-xl placeholder:text-[#8b7355]/30 text-[#5c4a33] shadow-inner"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355] ml-4">Ваши Мысли</label>
+
+                  <div className="flex-1 flex flex-col space-y-3 min-h-[220px]">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355] ml-4">Содержание</label>
                     <textarea 
                       value={newNoteContent}
                       onChange={(e) => setNewNoteContent(e.target.value)}
                       placeholder="Напиши что-то особенное для истории..."
-                      className="w-full h-48 bg-white border-4 border-[#e6d5bc] rounded-[2.5rem] px-8 py-8 focus:ring-0 focus:border-[#5c4a33] transition-all resize-none text-lg leading-relaxed placeholder:text-[#8b7355]/30 text-[#5c4a33] font-serif italic shadow-inner"
+                      className="w-full flex-1 bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] px-4 md:px-6 py-3 md:py-4 outline-none focus:ring-0 focus:border-[#e6d5bc] transition-all resize-none text-sm md:text-base leading-relaxed placeholder:text-[#8b7355]/40 text-[#5c4a33] font-serif italic shadow-inner no-scrollbar"
                     />
                   </div>
-                  <div className="flex justify-end pt-4">
+
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 pt-6 md:pt-10">
+                    <div className="flex-1 w-full">
+                    </div>
+
                     <button 
                       onClick={addNote}
                       disabled={!newNoteTitle.trim() || !newNoteContent.trim() || !currentUser}
-                      className="bg-[#5c4a33] text-white px-12 py-5 rounded-[2.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-4 disabled:opacity-50 border-2 border-[#e6d5bc]"
+                      className="w-full md:w-auto bg-[#5c4a33] text-[#fdfaf3] px-8 md:px-10 py-4 md:mb-2 rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-xs shadow-xl hover:scale-105 active:scale-95 transition-all flex justify-center items-center gap-3 disabled:opacity-50 border-2 border-transparent hover:border-[#e6d5bc]"
                     >
-                      <PenTool size={16} />
-                      Запечатлеть
+                      <Send size={16} />
+                      Опубликовать
                     </button>
                   </div>
                 </div>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Notes */}
-          <AnimatePresence mode="popLayout">
-            {filteredNotes.map((note) => (
-              <div key={note.id} className="break-inside-avoid mb-8">
-                <JournalNoteCard 
-                  note={note}
-                  currentUser={currentUser}
-                  isEditing={editingId === note.id}
-                  onEdit={() => startEditing(note)}
-                  onDelete={() => deleteNote(note.id)}
-                  onToggleLike={() => toggleLike(note.id)}
-                  onToggleComments={() => setOpenCommentsId(openCommentsId === note.id ? null : note.id)}
-                  isCommentsOpen={openCommentsId === note.id}
-                  commentText={commentText}
-                  onCommentChange={setCommentText}
-                  onAddComment={() => addComment(note.id)}
-                  editState={{
-                    title: editTitle,
-                    setTitle: setEditTitle,
-                    content: editContent,
-                    setContent: setEditContent,
-                    mood: editMood,
-                    setMood: setEditMood,
-                    onSave: updateNote,
-                    onCancel: cancelEditing
-                  }}
-                />
-              </div>
-            ))}
-          </AnimatePresence>
-
-          {/* Empty State */}
-          {filteredNotes.length === 0 && (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-center space-y-6">
-              <div className="w-24 h-24 bg-[#fdfaf3] border-4 border-[#e6d5bc] rounded-[2rem] flex items-center justify-center text-[#8b7355] shadow-lg">
-                <BookOpen size={48} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-serif font-bold text-[#5c4a33]">Летопись пока чиста</h3>
-                <p className="text-[#8b7355] italic max-w-xs mx-auto">
-                  "Поделитесь своими мыслями или чувствами. Каждая запись — это частичка вашей общей истории."
-                </p>
               </div>
             </div>
-          )}
+
+            {/* Right Side: Filters */}
+            <div className="lg:col-span-1 flex flex-col gap-4 md:gap-6">
+               {/* Author Filters */}
+               <div className="bg-[#fdfaf3] p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] relative overflow-hidden space-y-4 flex-1">
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+                  <div className="relative z-10">
+                    <h3 className="font-serif font-black text-lg md:text-xl text-[#5c4a33] flex items-center gap-3 mb-4">
+                      <User size={20} className="text-[#8b7355]" />
+                      Автор
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                      {(['all', 'Grinch', 'Cindy'] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setActiveTab(tab as any)}
+                          className={cn(
+                            "w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all relative z-10 text-left px-6 flex items-center gap-4",
+                            activeTab === tab 
+                              ? (currentUser === 'Grinch' 
+                                  ? "bg-[#0ea5e9] text-white shadow-[0_10px_20px_rgba(14,165,233,0.3)] border-2 border-white/20" 
+                                  : "bg-[#ec4899] text-white shadow-[0_10px_20px_rgba(236,72,153,0.3)] border-2 border-white/20")
+                              : "text-[#5c4a33]/60 hover:text-[#5c4a33] hover:bg-white/50"
+                          )}
+                        >
+                          <div className={cn("w-2 h-2 rounded-full transition-all", activeTab === tab ? 'bg-white' : 'bg-[#8b7355]/50')} />
+                          {tab === 'all' ? 'Все Свитки' : tab === 'Grinch' ? 'Гринч' : 'Синди Лу'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+              </div>
+
+              {/* Time/Status Filters */}
+              <div className="bg-[#fdfaf3] p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] relative overflow-hidden space-y-4 flex-1">
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+                  <div className="relative z-10">
+                    <h3 className="font-serif font-black text-lg md:text-xl text-[#5c4a33] flex items-center gap-3 mb-4">
+                      <Calendar size={20} className="text-[#8b7355]" />
+                      Период
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        { id: 'all', label: 'За все время' },
+                        { id: 'unread', label: 'Непрочитанные' },
+                        { id: '7days', label: 'Последние 7 дней' }
+                      ].map((filter) => (
+                        <button
+                          key={filter.id}
+                          onClick={() => setTimeFilter(filter.id as any)}
+                          className={cn(
+                            "w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all relative z-10 text-left px-6 flex items-center gap-4",
+                            timeFilter === filter.id 
+                              ? (currentUser === 'Grinch' 
+                                  ? "bg-[#0ea5e9] text-white shadow-[0_10px_20px_rgba(14,165,233,0.3)] border-2 border-white/20" 
+                                  : "bg-[#ec4899] text-white shadow-[0_10px_20px_rgba(236,72,153,0.3)] border-2 border-white/20")
+                              : "text-[#5c4a33]/60 hover:text-[#5c4a33] hover:bg-white/50"
+                          )}
+                        >
+                          <div className={cn("w-2 h-2 rounded-full transition-all", timeFilter === filter.id ? 'bg-white' : 'bg-[#8b7355]/50')} />
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedArchiveMonth && (
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-[#fdfaf3] p-5 md:p-6 rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-xl">
+             <div className="space-y-1 text-center md:text-left">
+                <h3 className="text-lg md:text-xl font-serif font-black text-[#5c4a33]">Фильтры архива</h3>
+                <p className="text-[10px] font-black uppercase text-[#8b7355] tracking-widest">Просмотр записей за {currentMonthName()}</p>
+             </div>
+             <div className="flex gap-2 p-2 bg-[#f5e6d3] rounded-2xl border-4 border-[#e6d5bc] w-full md:w-auto">
+                {(['all', 'Grinch', 'Cindy'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab as any)}
+                    className={cn(
+                      "flex-1 md:flex-none px-4 md:px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                      activeTab === tab 
+                        ? (currentUser === 'Grinch' 
+                            ? "bg-[#0ea5e9] text-white shadow-md" 
+                            : "bg-[#ec4899] text-white shadow-md")
+                        : "text-[#8b7355] hover:text-[#5c4a33] hover:bg-white/50"
+                    )}
+                  >
+                    {tab === 'all' ? 'Все' : tab === 'Grinch' ? 'Гринч' : 'Синди'}
+                  </button>
+                ))}
+             </div>
+          </div>
+        )}
+
+          {/* Notes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {(isLoading || isNotesLoading) ? (
+              // Skeleton loading state
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={`skeleton-${i}`} className="bg-[#fdfaf3] p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[15px_15px_40px_rgba(0,0,0,0.08)] space-y-4">
+                   <div className="flex items-center gap-4">
+                    <Skeleton className="w-10 h-10 rounded-xl" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </div>
+                   </div>
+                   <Skeleton className="h-6 w-3/4" />
+                   <div className="space-y-2">
+                     <Skeleton className="h-4 w-full" />
+                     <Skeleton className="h-4 w-5/6" />
+                     <Skeleton className="h-4 w-4/6" />
+                   </div>
+                </div>
+              ))
+            ) : filteredNotes.length > 0 ? (
+              filteredNotes.map((note) => (
+                <JournalNoteCard 
+                  key={note.id}
+                  note={note}
+                  currentUser={currentUser}
+                  onToggleLike={() => toggleLike(note.id)}
+                  onClick={() => {
+                    setSelectedNote(note);
+                    markAsRead(note.id);
+                  }}
+                />
+              ))
+            ) : (!isLoading && !isNotesLoading && filteredNotes.length === 0) ? (
+              <div className="col-span-full py-10 md:py-20 flex flex-col items-center justify-center text-center space-y-4 md:space-y-6">
+                <div className="w-20 h-20 md:w-24 md:h-24 bg-[#fdfaf3] border-4 border-[#e6d5bc] rounded-[1.5rem] md:rounded-[2rem] flex items-center justify-center text-[#8b7355] shadow-lg">
+                  <BookOpen className="w-10 h-10 md:w-12 md:h-12" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl md:text-2xl font-serif font-bold text-[#5c4a33]">Летопись пока чиста</h3>
+                  <p className="text-sm md:text-base text-[#8b7355] italic max-w-xs mx-auto">
+                    "Поделитесь своими мыслями или чувствами. Каждая запись — это частичка вашей общей истории."
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Special Feature: "Тайный Конверт" */}
-      <motion.div 
-        ref={whisperSectionRef}
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        className="pt-24 text-center"
-      >
-        <div className="max-w-3xl mx-auto p-16 bg-[#fdfaf3] rounded-[4rem] border-8 border-[#e6d5bc] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] space-y-10 relative overflow-hidden group">
-          {/* Paper texture overlay */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] z-0" />
-          
-          <div className="relative z-10 space-y-8">
-            <div className="w-24 h-24 bg-[#5c4a33] border-4 border-amber-100 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.3)] flex items-center justify-center mx-auto text-amber-100 group-hover:scale-110 group-hover:rotate-12 transition-all duration-700 relative">
-              <Mail size={48} />
-              <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-600 rounded-full border-2 border-white shadow-sm" />
-            </div>
-            
-            <div className="space-y-4">
-              <h2 className="text-5xl font-serif font-black text-[#5c4a33] tracking-tight">Тайный Конверт</h2>
-              <p className="text-[#8b7355] italic leading-relaxed max-w-md mx-auto text-lg font-serif">
-                "Создай мгновение магии. Твое письмо будет скрыто защитным слоем, пока партнер его не сотрет."
-              </p>
-            </div>
 
-            <div className="flex flex-col items-center gap-8">
-              <div className="w-full max-w-lg relative">
-                <textarea 
-                  value={whisperText}
-                  onChange={(e) => setWhisperText(e.target.value)}
-                  placeholder="Напиши что-то сокровенное..."
-                  className="w-full bg-white border-4 border-[#e6d5bc] rounded-[2.5rem] px-10 py-8 focus:ring-0 focus:border-[#5c4a33] transition-all resize-none text-xl placeholder:text-[#8b7355]/20 shadow-inner font-serif italic h-40 text-[#5c4a33]"
-                />
-                <div className="absolute -bottom-4 -right-4 text-[#e6d5bc]">
-                  <Sparkles size={40} />
-                </div>
-              </div>
-              <div className="flex flex-col items-center gap-6">
-                <button 
-                  onClick={sendWhisper}
-                  disabled={!whisperText.trim() || isSent}
-                  className="px-16 py-6 rounded-[2.5rem] bg-[#5c4a33] text-white font-black uppercase tracking-[0.3em] text-sm shadow-[0_20px_40px_rgba(0,0,0,0.4)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-4 group/btn border-2 border-[#e6d5bc]"
-                >
-                  <AnimatePresence mode="wait">
-                    {isSent ? (
-                      <motion.div
-                        key="sent"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-2"
-                      >
-                        Запечатано!
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="send"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex items-center gap-3"
-                      >
-                        <Send size={20} className="group-hover/btn:translate-x-2 group-hover/btn:-translate-y-2 transition-transform" />
-                        Отправить письмо
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </button>
-                
-                {whisperText.trim() && !isSent && (
-                  <button 
-                    onClick={() => {
-                      setIsWhisperPreview(true);
-                      setIsWhisperModalOpen(true);
-                    }}
-                    className="text-xs font-black uppercase tracking-[0.2em] text-[#8b7355]/40 hover:text-[#5c4a33] transition-colors border-b-2 border-transparent hover:border-[#5c4a33]"
-                  >
-                    Посмотреть предпросмотр
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
 
-      {/* Floating Action Button for quick scroll to Whisper */}
-      <motion.button
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={scrollToWhisper}
-        className="fixed bottom-36 right-6 z-[100] md:bottom-44 md:right-12 w-16 h-16 rounded-full bg-[#5c4a33] text-white shadow-2xl flex items-center justify-center group"
-      >
-        <Mail size={24} className="group-hover:rotate-12 transition-transform" />
-        <span className="absolute right-full mr-4 px-4 py-2 bg-[#5c4a33] text-white rounded-xl text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-          Написать письмо
-        </span>
-      </motion.button>
-
-      {/* Scratch-off Modal */}
+      {/* Note Modal */}
+      {/* Confirm Modal */}
       <AnimatePresence>
-        {isWhisperModalOpen && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center px-4">
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[300] flex items-center justify-center px-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsWhisperModalOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-xl"
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute inset-0 bg-black/40 backdrop-blur-md"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-[#fdfaf3] rounded-[3rem] border-4 border-[#e6d5bc] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-sm bg-[#fdfaf3] rounded-[2rem] md:rounded-[2.5rem] border-4 md:border-8 border-[#e6d5bc] shadow-2xl p-6 md:p-8 space-y-6 text-center overflow-hidden"
             >
-              <div className="p-8 md:p-10 space-y-6 max-h-[85vh] flex flex-col">
-                <div className="space-y-2 flex justify-between items-start border-b-2 border-[#e6d5bc] pb-4">
-                  <div>
-                    <h3 className="text-2xl font-serif font-bold text-[#5c4a33]">Тайное послание</h3>
-                    <p className="text-[10px] text-[#8b7355] font-black uppercase tracking-widest flex items-center gap-2">
-                      <Eraser size={14} />
-                      Стирай, чтобы прочитать
-                    </p>
-                  </div>
-                  <button 
-                    onClick={() => setIsWhisperModalOpen(false)}
-                    className="p-2 hover:bg-[#f5e6d3] rounded-full transition-all text-[#8b7355]"
-                  >
-                    <X size={20} />
-                  </button>
+              <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+              
+              <div className="relative z-10 space-y-4">
+                <div className="w-16 h-16 bg-[#f5e6d3] rounded-2xl border-4 border-[#e6d5bc] flex items-center justify-center text-3xl mx-auto shadow-inner rotate-3">
+                  ⚠️
                 </div>
-
-                <div className="relative flex-1 overflow-y-auto custom-scrollbar rounded-[2rem] bg-white border-4 border-[#e6d5bc] shadow-inner min-h-[400px]">
-                  <div className="relative p-10 min-h-full">
-                    {/* The Text */}
-                    <p className="text-xl md:text-2xl font-serif italic text-[#5c4a33] leading-relaxed whitespace-pre-wrap text-left align-top font-medium pt-2">
-                      {isWhisperPreview ? whisperText : receivedWhisper}
-                    </p>
-                    
-                    {/* Scratch Canvas */}
-                    <canvas
-                      ref={canvasRef}
-                      width={800}
-                      height={1200}
-                      className="absolute inset-0 w-full h-full cursor-crosshair z-30 touch-none"
-                      onMouseMove={handleScratch}
-                      onTouchMove={handleScratch}
-                    />
-                  </div>
-                </div>
-                
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={autoErase}
-                    className="w-full py-4 rounded-2xl bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-widest text-[10px] hover:bg-[#4a3b29] transition-all flex items-center justify-center gap-2 shadow-lg group"
-                  >
-                    <Sparkles size={14} className="group-hover:animate-spin" />
-                    Магическое проявление
-                  </button>
-                  
-                  <button 
-                    onClick={async () => {
-                      setIsWhisperModalOpen(false);
-                      if (!isWhisperPreview && currentUser && receivedWhisper) {
-                        const key = currentUser === 'Grinch' ? 'whisper_for_grinch' : 'whisper_for_cindy';
-                        
-                        // Save to history only now, when it's being closed/read
-                        await supabase
-                          .from('whisper_history')
-                          .insert({
-                            sender: currentUser === 'Grinch' ? 'Cindy' : 'Grinch',
-                            receiver: currentUser,
-                            content: receivedWhisper,
-                            created_at: new Date().toISOString()
-                          });
-
-                        await supabase
-                          .from('global_state')
-                          .delete()
-                          .eq('key', key);
-                        
-                        setReceivedWhisper("");
-                        refreshWhispers();
-                        window.history.replaceState({}, '', window.location.pathname);
-                      } else {
-                        setIsWhisperPreview(false);
-                      }
-                    }}
-                    className="w-full py-4 rounded-2xl bg-[#f5e6d3] text-[#5c4a33] font-black uppercase tracking-widest text-[10px] hover:bg-[#e6d5bc] transition-all"
-                  >
-                    Закрыть и сохранить в историю
-                  </button>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-serif font-black text-[#5c4a33]">{confirmModal.title}</h3>
+                  <p className="text-sm font-serif italic text-[#8b7355] leading-relaxed">
+                    {confirmModal.message}
+                  </p>
                 </div>
               </div>
+
+              <div className="relative z-10 flex gap-3 pt-2">
+                <button
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 px-4 py-3 rounded-xl border-2 border-[#e6d5bc] text-[#5c4a33] font-black uppercase tracking-widest text-[10px] hover:bg-[#f5e6d3] transition-all"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={confirmModal.onConfirm}
+                  className="flex-1 px-4 py-3 rounded-xl bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-widest text-[10px] shadow-lg hover:scale-105 active:scale-95 transition-all border-2 border-transparent hover:border-[#e6d5bc]"
+                >
+                  Удалить
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedNote && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center px-2 py-6 md:px-4 md:py-10">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedNote(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-6xl max-h-[95vh] md:max-h-[85vh]"
+            >
+              <div className="absolute -inset-10 bg-gradient-to-br from-amber-400/10 via-transparent to-pink-400/10 rounded-full blur-2xl opacity-70" />
+              <div className="relative z-10 bg-[#fdfaf3] rounded-[2rem] md:rounded-[3rem] border-8 md:border-[12px] border-[#e6d5bc] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[90vh] md:h-[80vh]">
+                {/* Left Column: Note Content */}
+                <div className="flex-[1.5] md:flex-1 flex flex-col min-w-0 border-b-4 md:border-b-0 md:border-r-4 border-[#e6d5bc]/30 relative overflow-hidden h-full">
+                    {editingId === selectedNote.id ? (
+                      <div className="flex-1 p-5 md:p-12 overflow-hidden no-scrollbar">
+                        <div className="space-y-4 md:space-y-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#8b7355]">Заголовок</label>
+                            <input 
+                              value={editTitle} 
+                              onChange={(e) => setEditTitle(e.target.value)} 
+                              className="w-full bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] px-4 md:px-6 py-3 md:py-4 focus:ring-0 focus:border-[#5c4a33] transition-all font-serif font-bold text-lg md:text-2xl text-[#5c4a33]"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#8b7355]">Настроение</label>
+                              <button 
+                                onClick={toggleEmojiSet}
+                                className="text-[9px] font-black uppercase tracking-widest text-[#5c4a33]/40 hover:text-[#5c4a33] transition-colors flex items-center gap-1"
+                              >
+                                <RefreshCw size={12} className="group-active:rotate-180 transition-transform duration-500" />
+                                Сменить
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2 md:gap-3 bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] p-2 md:p-3 shadow-inner">
+                              {EMOJI_GROUPS[currentEmojiSet].map(m => (
+                                <button 
+                                  key={m} 
+                                  onClick={() => setEditMood(m)}
+                                  className={cn(
+                                    "flex-1 h-10 md:h-12 rounded-xl flex items-center justify-center transition-all text-xl md:text-2xl",
+                                  editMood === m 
+                                    ? (currentUser === 'Grinch' 
+                                        ? "bg-[#0ea5e9] text-white scale-105 shadow-[0_10px_20px_rgba(14,165,233,0.3)]" 
+                                        : "bg-[#ec4899] text-white scale-105 shadow-[0_10px_20px_rgba(236,72,153,0.3)]")
+                                    : "bg-transparent text-[#8b7355] hover:bg-[#f5e6d3]"
+                                )}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-[#8b7355]">Содержание</label>
+                          <textarea 
+                            value={editContent} 
+                            onChange={(e) => setEditContent(e.target.value)} 
+                            className="w-full h-40 md:h-80 bg-white border-2 md:border-4 border-[#e6d5bc] rounded-[1.25rem] md:rounded-[1.5rem] px-4 md:px-6 py-3 md:py-4 focus:ring-0 focus:border-[#5c4a33] transition-all resize-none text-sm md:text-lg leading-relaxed text-[#5c4a33] font-serif italic shadow-inner no-scrollbar"
+                          />
+                        </div>
+                        <div className="flex gap-2 md:gap-3 pt-2">
+                          <button 
+                            onClick={updateNote}
+                            className="flex-1 bg-[#5c4a33] text-[#fdfaf3] px-3 md:px-6 py-3 md:py-4 rounded-xl md:rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-[10px] md:text-xs shadow-xl hover:scale-105 active:scale-95 transition-all border-2 border-transparent hover:border-[#e6d5bc]"
+                          >
+                            Сохранить
+                          </button>
+                          <button 
+                            onClick={cancelEditing}
+                            className="px-3 md:px-6 py-3 md:py-4 rounded-xl md:rounded-[1.5rem] font-black uppercase tracking-[0.2em] text-[10px] md:text-xs shadow-lg border-2 border-[#e6d5bc] text-[#5c4a33] hover:bg-[#f5e6d3] transition-all"
+                          >
+                            Отмена
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setConfirmModal({
+                                isOpen: true,
+                                title: "Удаление записи",
+                                message: "Точно хочешь удалить эту запись? Она исчезнет навсегда... 🥺",
+                                onConfirm: () => {
+                                  deleteNote(selectedNote.id);
+                                  setSelectedNote(null);
+                                  setEditingId(null);
+                                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }
+                              });
+                            }} 
+                            className="p-3 md:p-4 rounded-xl md:rounded-[1.5rem] border-2 border-red-100 bg-red-50 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-md active:scale-95 group flex items-center justify-center"
+                            title="Удалить запись"
+                          >
+                            <Trash2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col h-full relative">
+                      <div className="p-5 md:p-12 flex-1 flex flex-col h-full">
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between gap-3 md:gap-4 mb-6 md:mb-8 shrink-0">
+                          <div className="flex-1 space-y-2 md:space-y-3">
+                            <div className="flex items-center gap-3 md:gap-4">
+                              <div className={cn(
+                                "w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-xl md:text-2xl shadow-md border-3 md:border-4 border-[#e6d5bc] shrink-0",
+                                "bg-[#5c4a33] text-[#fdfaf3]"
+                              )}>
+                                {selectedNote.author === 'Grinch' ? <Trees size={20} className="md:w-6 md:h-6" /> : <Moon size={20} className="md:w-6 md:h-6" />}
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm md:text-lg text-[#5c4a33]">
+                                  {selectedNote.author === 'Grinch' ? 'Гринч' : 'Синди Лу'}
+                                </p>
+                                <p className="text-[9px] md:text-xs font-black uppercase tracking-widest text-[#8b7355]/60">
+                                  {selectedNote.date}
+                                </p>
+                              </div>
+                            </div>
+                            <h3 className="text-2xl md:text-4xl font-serif font-bold text-[#5c4a33] leading-tight">{selectedNote.title}</h3>
+                          </div>
+                          <div className="flex gap-3 shrink-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-xl md:rounded-2xl border-3 md:border-4 border-[#e6d5bc] flex items-center justify-center text-2xl md:text-3xl shadow-lg rotate-6">
+                              {selectedNote.mood}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Scrollable Content Area */}
+                        <div className="flex-1 relative mb-8 min-h-[300px] flex flex-col">
+                          <PagedText 
+                            content={selectedNote.content} 
+                            renderFooter={({ currentPage, totalPages, handlePrev, handleNext }) => (
+                              <div className="shrink-0 space-y-4 pt-4 border-t-2 border-[#e6d5bc]/30 relative z-30">
+                                <div className="flex items-center justify-between relative min-h-[64px]">
+                                  <div className="flex items-center gap-2 md:gap-3">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleLike(selectedNote.id);
+                                      }}
+                                      className={cn(
+                                        "flex items-center gap-2 md:gap-3 px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl border-2 transition-all active:scale-95 bg-[#f5e6d3] border-[#5c4a33] text-[#5c4a33] hover:scale-105 shadow-md"
+                                      )}
+                                    >
+                                      <Heart className="w-5 h-5 md:w-6 md:h-6" fill="currentColor" />
+                                      <span className="text-xs md:text-sm font-black tracking-widest">{selectedNote.likes}</span>
+                                    </button>
+
+                                    {currentUser === selectedNote.author && (
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <button 
+                                          onClick={() => startEditing(selectedNote)} 
+                                          className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-lg md:rounded-xl border-2 border-[#e6d5bc] bg-[#5c4a33] text-[#fdfaf3] hover:scale-105 active:scale-95 transition-all shadow-lg"
+                                        >
+                                          <Edit3 size={14} className="md:w-4 md:h-4" />
+                                          <span className="text-[9px] md:text-[10px] font-black uppercase tracking-widest">Ред.</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {totalPages > 1 && (
+                                    <div className="flex items-center gap-2 md:gap-4 bg-[#fdfaf3]/80 backdrop-blur-sm px-3 md:px-4 py-1 rounded-3xl">
+                                      <button 
+                                        onClick={handlePrev} 
+                                        disabled={currentPage === 0} 
+                                        className="p-2 md:p-4 rounded-xl bg-white border-2 border-[#e6d5bc] text-[#5c4a33] disabled:opacity-30 shadow-md hover:scale-110 active:scale-90 transition-all"
+                                      >
+                                        <ChevronLeft size={20} className="md:w-6 md:h-6" />
+                                      </button>
+                                      <span className="text-xs md:text-sm font-black text-[#8b7355] min-w-[2.5rem] md:min-w-[3rem] text-center">
+                                        {currentPage + 1} / {totalPages}
+                                      </span>
+                                      <button 
+                                        onClick={handleNext} 
+                                        disabled={currentPage === totalPages - 1} 
+                                        className="p-2 md:p-4 rounded-xl bg-white border-2 border-[#e6d5bc] text-[#5c4a33] disabled:opacity-30 shadow-md hover:scale-110 active:scale-90 transition-all"
+                                      >
+                                        <ChevronRight size={20} className="md:w-6 md:h-6" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Empty spacer to balance layout */}
+                                  <div className="w-[140px] hidden md:block" />
+                                </div>
+                              </div>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: Comments */}
+                <div className="w-full md:w-96 flex-[1] bg-[#fdfaf3] p-4 md:p-8 flex flex-col md:border-l-2 border-[#e6d5bc]/30 overflow-hidden relative">
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b-2 border-dashed border-[#e6d5bc]/70 shrink-0">
+                    <h4 className="text-lg font-serif font-bold text-[#5c4a33] flex items-center gap-2">
+                      <span className="text-xl">💌</span>
+                      Комментарии
+                    </h4>
+                    <span className="px-3 py-1 bg-[#f5e6d3] rounded-full text-xs font-black uppercase tracking-widest text-[#5c4a33]/70">
+                      {selectedNote.comments.length}
+                    </span>
+                  </div>
+                  
+                  {/* Vertical Comments Container (Restored) */}
+                  <div className="flex-1 overflow-y-auto space-y-6 mb-6 no-scrollbar">
+                    {selectedNote.comments.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center space-y-4 text-center">
+                        <div className="w-20 h-20 bg-[#5c4a33] rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                          <span className="text-4xl">📖</span>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[#5c4a33]/80 font-serif italic">Пока пусто...</p>
+                          <p className="text-xs text-[#8b7355]/60 font-medium">Начните вашу историю здесь!</p>
+                        </div>
+                      </div>
+                    ) : (
+                      selectedNote.comments.map((comment) => {
+                        const isCommentAuthor = comment.author === currentUser;
+                        const replyToComment = selectedNote.comments.find((c: any) => c.id === comment.replyTo);
+                        
+                        return (
+                          <div 
+                            key={comment.id} 
+                            className={cn(
+                              "space-y-2 flex flex-col group/comment break-inside-avoid mb-6",
+                              isCommentAuthor ? "items-end" : "items-start"
+                            )}
+                          >
+                            <div className={cn(
+                              "flex items-start gap-2 max-w-[95%]",
+                              isCommentAuthor ? "flex-row-reverse" : "flex-row"
+                            )}>
+                              <div className={cn(
+                                "w-8 h-8 rounded-xl flex items-center justify-center text-base shadow-md border-3 border-[#e6d5bc] shrink-0 mt-1",
+                                "bg-[#5c4a33] text-[#fdfaf3]"
+                              )}>
+                                {comment.author === 'Grinch' ? <Trees size={12} /> : <Moon size={12} />}
+                              </div>
+
+                              <div className="flex flex-col space-y-1">
+                                {replyToComment && (
+                                  <div className={cn(
+                                    "flex flex-col gap-1 mb-1",
+                                    isCommentAuthor ? "items-end" : "items-start"
+                                  )}>
+                                    <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[#8b7355]/60">
+                                      <Reply size={10} />
+                                      Ответ
+                                    </div>
+                                    <div className={cn(
+                                      "px-3 py-1.5 rounded-xl bg-[#f5e6d3]/50 border-2 border-[#e6d5bc] text-[10px] italic text-[#5c4a33]/70 line-clamp-1 max-w-[200px]",
+                                      isCommentAuthor ? "rounded-tr-none" : "rounded-tl-none"
+                                    )}>
+                                      "{replyToComment.text}"
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="flex flex-col gap-1 group/msg w-full">
+                                  <div 
+                                    className={cn(
+                                      "rounded-2xl px-4 py-3 border-3 border-[#e6d5bc] shadow-md relative",
+                                      isCommentAuthor ? "bg-[#5c4a33] rounded-tr-md" : "bg-white rounded-tl-md"
+                                    )}
+                                  >
+                                    {editingCommentId === comment.id ? (
+                                      <div className="space-y-3">
+                                        <textarea
+                                          value={editCommentText}
+                                          onChange={(e) => setEditCommentText(e.target.value)}
+                                          className={cn(
+                                            "w-full bg-transparent border-b-2 border-dashed outline-none font-serif text-sm min-h-[60px] resize-none",
+                                            isCommentAuthor ? "text-[#fdfaf3] border-white/30" : "text-[#5c4a33] border-[#5c4a33]/30"
+                                          )}
+                                          autoFocus
+                                        />
+                                        <div className="flex items-center justify-end gap-2">
+                                          <button
+                                            onClick={() => {
+                                              setEditingCommentId(null);
+                                              setEditCommentText("");
+                                            }}
+                                            className="p-1 hover:bg-black/10 rounded-lg transition-colors"
+                                          >
+                                            <X size={14} className={isCommentAuthor ? "text-[#fdfaf3]" : "text-[#5c4a33]"} />
+                                          </button>
+                                          <button
+                                            onClick={() => editComment(selectedNote.id, comment.id)}
+                                            className="p-1 hover:bg-black/10 rounded-lg transition-colors"
+                                          >
+                                            <Save size={14} className={isCommentAuthor ? "text-[#fdfaf3]" : "text-[#5c4a33]"} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <p className={cn(
+                                          "font-serif font-bold leading-relaxed break-words overflow-hidden text-sm",
+                                          isCommentAuthor ? "text-[#fdfaf3]" : "text-[#5c4a33]"
+                                        )}>
+                                          {comment.text.replace(/^@(Гринч|Синди Лу|Синди),?\s*/, '')}
+                                        </p>
+                                        <div className={cn(
+                                          "flex items-center gap-2 mt-1",
+                                          isCommentAuthor ? "justify-end" : "justify-start"
+                                        )}>
+                                          <span className={cn(
+                                            "text-[8px] font-semibold tracking-wide opacity-60",
+                                            isCommentAuthor ? "text-[#e6d5bc]" : "text-[#8b7355]"
+                                          )}>
+                                            {comment.date}
+                                          </span>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {editingCommentId !== comment.id && (
+                                    <div className={cn(
+                                      "flex items-center gap-3 px-1 pt-1 opacity-0 group-hover/msg:opacity-100 transition-all duration-300",
+                                      isCommentAuthor ? "justify-end" : "justify-start"
+                                    )}>
+                                      {isCommentAuthor ? (
+                                        <>
+                                          <button 
+                                            onClick={() => {
+                                              setEditingCommentId(comment.id);
+                                              setEditCommentText(comment.text);
+                                            }}
+                                            className="text-[9px] font-black uppercase tracking-widest text-[#8b7355] hover:text-[#5c4a33] transition-colors"
+                                          >
+                                            Ред.
+                                          </button>
+                                          <button 
+                                            onClick={() => {
+                                              setConfirmModal({
+                                                isOpen: true,
+                                                title: "Удаление комментария",
+                                                message: "Ты правда хочешь удалить этот комментарий? 🥺",
+                                                onConfirm: () => {
+                                                  deleteComment(selectedNote.id, comment.id);
+                                                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                                }
+                                              });
+                                            }}
+                                            className="text-[9px] font-black uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors"
+                                          >
+                                            Удалить
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button 
+                                          onClick={() => {
+                                            setReplyingToCommentId(comment.id);
+                                            document.querySelector('textarea')?.focus();
+                                          }}
+                                          className="text-[9px] font-black uppercase tracking-widest text-[#8b7355] hover:text-[#5c4a33] transition-colors"
+                                        >
+                                          Ответить
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Comments Pagination Controls */}
+                  {commentTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-4 mb-4 shrink-0">
+                      <button 
+                        onClick={() => scrollComments('prev')}
+                        disabled={commentPage === 0}
+                        className="p-1.5 rounded-lg hover:bg-[#5c4a33] hover:text-[#fdfaf3] transition-all disabled:opacity-30 border-2 border-[#e6d5bc]/30"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="text-[10px] font-black text-[#8b7355]">
+                        {commentPage + 1} / {commentTotalPages}
+                      </span>
+                      <button 
+                        onClick={() => scrollComments('next')}
+                        disabled={commentPage === commentTotalPages - 1}
+                        className="p-1.5 rounded-lg hover:bg-[#5c4a33] hover:text-[#fdfaf3] transition-all disabled:opacity-30 border-2 border-[#e6d5bc]/30"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
+
+                  {currentUser && (
+                    <div className="shrink-0 pt-4 border-t-2 border-dashed border-[#e6d5bc]/70 space-y-3">
+                      {replyingToCommentId && (
+                        <div className="flex items-center justify-between px-4 py-2 bg-[#f5e6d3] rounded-xl border-2 border-[#e6d5bc] animate-in fade-in slide-in-from-bottom-2">
+                          <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#5c4a33]">
+                            <Reply size={12} />
+                            Ответ на комментарий
+                          </div>
+                          <button 
+                            onClick={() => setReplyingToCommentId(null)}
+                            className="p-1 hover:bg-white/50 rounded-full transition-colors text-[#5c4a33]"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                      <textarea 
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder="Напиши что-то милое..."
+                        className="w-full bg-white border-3 border-[#e6d5bc] rounded-[1.5rem] px-5 py-3 focus:ring-0 focus:border-[#5c4a33] transition-all resize-none text-sm placeholder:text-[#8b7355]/40 shadow-inner font-serif text-[#5c4a33] h-20"
+                        onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), addComment(selectedNote.id))}
+                      />
+                      <button 
+                        onClick={() => addComment(selectedNote.id)}
+                        disabled={!commentText.trim()}
+                        className="w-full bg-[#5c4a33] text-[#fdfaf3] px-4 py-3 rounded-[1.5rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-lg hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <span>Отправить</span>
+                        <Send size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedNote(null)}
+                className="absolute -bottom-4 md:-bottom-6 left-1/2 -translate-x-1/2 px-6 md:px-8 py-2 md:py-3 bg-[#fdfaf3]/80 backdrop-blur-sm border-2 md:border-4 border-[#e6d5bc] rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest text-[#5c4a33] hover:scale-105 transition-transform shadow-lg z-50"
+              >
+                Закрыть
+              </button>
             </motion.div>
           </div>
         )}
@@ -758,242 +1888,141 @@ function JournalContent() {
 function JournalNoteCard({ 
   note, 
   currentUser,
-  isEditing, 
-  onEdit, 
-  onDelete, 
-  onToggleLike, 
-  onToggleComments, 
-  isCommentsOpen, 
-  commentText, 
-  onCommentChange, 
-  onAddComment,
-  editState
+  onToggleLike,
+  onClick
 }: { 
   note: Note; 
   currentUser: 'Grinch' | 'Cindy' | null;
-  isEditing: boolean; 
-  onEdit: () => void; 
-  onDelete: () => void; 
   onToggleLike: () => void; 
-  onToggleComments: () => void; 
-  isCommentsOpen: boolean; 
-  commentText: string; 
-  onCommentChange: (val: string) => void; 
-  onAddComment: () => void;
-  editState: {
-    title: string;
-    setTitle: (val: string) => void;
-    content: string;
-    setContent: (val: string) => void;
-    mood: string;
-    setMood: (val: string) => void;
-    onSave: () => void;
-    onCancel: () => void;
-  };
+  onClick: () => void;
 }) {
-  const isMe = note.author === currentUser;
+
+  const isUnread = currentUser && note.author !== currentUser && !note.read_by?.includes(currentUser);
+
+  // Check for unread comments
+  const hasUnreadComments = useMemo(() => {
+    if (!currentUser || note.comments.length === 0) return false;
+    
+    // Partner's comments
+    const partnerComments = note.comments.filter((c: any) => c.author !== currentUser);
+    if (partnerComments.length === 0) return false;
+    
+    // User's last read timestamp for this note
+    const userReadTimestamp = (note.comments_read_by || {})[currentUser] || 0;
+    
+    // Check if any partner comment is newer than our last read
+    return partnerComments.some((c: any) => Number(c.id) > userReadTimestamp);
+  }, [note.comments, note.comments_read_by, currentUser]);
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="w-full"
+      className="w-full break-inside-avoid relative"
     >
-      <div className="group relative">
-        {/* Date & Author Header - Wax Seal Style */}
-        <div className={cn(
-          "flex items-center gap-4 mb-4 px-6",
-          isMe ? "flex-row" : "flex-row-reverse"
-        )}>
-          <div className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center shadow-xl border-4 border-[#e6d5bc] relative z-20 transition-transform group-hover:rotate-12",
-            note.author === 'Grinch' ? "bg-[#5c4a33] text-amber-200" : "bg-[#5c4a33] text-blue-100"
-          )}>
-            {note.author === 'Grinch' ? <Trees size={24} /> : <Moon size={24} />}
-            {/* Wax drips */}
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-inherit rounded-full" />
-            <div className="absolute -bottom-2 right-2 w-2 h-2 bg-inherit rounded-full" />
-          </div>
-          <div className={cn(
-            "flex flex-col",
-            isMe ? "items-start" : "items-end"
-          )}>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#5c4a33]">
-              {note.author === 'Grinch' ? 'Гринч' : 'Синди Лу'}
-            </span>
-            <div className="flex items-center gap-2 text-[9px] font-black text-[#8b7355]/60 uppercase tracking-widest">
-              <Calendar size={10} />
-              {note.date}
+      {/* Unread Badge (Ribbon) */}
+      <AnimatePresence>
+        {isUnread && (
+          <motion.div
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="absolute -top-2 -right-2 z-20 pointer-events-none"
+          >
+            <div className={cn(
+              "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border-2 border-white flex items-center gap-2",
+              currentUser === 'Grinch' 
+                ? "bg-[#0ea5e9] text-white shadow-[0_10px_20px_rgba(14,165,233,0.3)]" 
+                : "bg-[#ec4899] text-white shadow-[0_10px_20px_rgba(236,72,153,0.3)]"
+            )}>
+              <Sparkles size={12} className="animate-pulse text-white" />
+              Новое
             </div>
-          </div>
-          {isMe && !isEditing && (
-            <div className="flex gap-2 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={onEdit} className="p-2.5 rounded-xl bg-white border-2 border-[#e6d5bc] text-[#8b7355] hover:text-[#5c4a33] transition-all shadow-sm">
-                <Edit3 size={14} />
-              </button>
-              <button onClick={onDelete} className="p-2.5 rounded-xl bg-white border-2 border-red-100 text-red-300 hover:text-red-500 transition-all shadow-sm">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
-        </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        <Card className={cn(
-          "relative transition-all duration-300 hover:shadow-2xl border-4 border-[#e6d5bc] overflow-hidden bg-[#fdfaf3] rounded-[2.5rem] shadow-lg",
-        )}>
-          {/* Decorative Leaf Sketch */}
-          <div className="absolute -bottom-4 -right-4 opacity-[0.05] pointer-events-none rotate-12">
-            <Trees size={160} />
-          </div>
+      <div 
+        onClick={onClick}
+        className={cn(
+          "bg-[#fdfaf3] p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border-[8px] md:border-[12px] shadow-[15px_15px_40px_rgba(0,0,0,0.08)] relative overflow-hidden space-y-4 md:space-y-6 group flex flex-col min-h-[280px] md:min-h-[320px] cursor-pointer hover:scale-[1.01] transition-all duration-300",
+          isUnread ? "border-pink-500/50 ring-4 md:ring-8 ring-pink-500/10 shadow-[0_20px_40px_rgba(236,72,153,0.1)]" : "border-[#e6d5bc]/30",
+          note.author === 'Grinch' ? "ring-2 md:ring-4 ring-[#0ea5e9]/20 border-[#bae6fd]" : "ring-2 md:ring-4 ring-[#ec4899]/20 border-[#fbcfe8]"
+        )}
+      >
+        <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
 
-          {isEditing ? (
-            <div className="p-10 space-y-8">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex gap-2">
-                  {['🌿', '🌸', '🥧', '🧸', '❤️'].map(m => (
-                    <button 
-                      key={m} 
-                      onClick={() => editState.setMood(m)}
-                      className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center transition-all text-xl border-2 shadow-sm",
-                        editState.mood === m ? "bg-[#5c4a33] border-[#5c4a33] text-white scale-110" : "bg-white border-[#e6d5bc] hover:bg-[#fdfaf3]"
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
+        <div className="relative z-10 space-y-6">
+          {/* Card Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-md border-4 border-[#e6d5bc] shrink-0",
+                      "bg-[#5c4a33] text-[#fdfaf3]"
+                  )}>
+                    {note.author === 'Grinch' ? <Trees size={20} /> : <Moon size={20} />}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-[#5c4a33]">
+                      {note.author === 'Grinch' ? 'Гринч' : 'Синди Лу'}
+                    </p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#8b7355]/60">
+                      {note.date}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={editState.onCancel} className="p-4 rounded-2xl bg-white border-2 border-[#e6d5bc] text-[#8b7355] hover:bg-[#f5e6d3] transition-all">
-                    <X size={20} />
-                  </button>
-                  <button onClick={editState.onSave} className="p-4 rounded-2xl bg-[#5c4a33] text-white hover:scale-105 active:scale-95 transition-all shadow-xl border-2 border-[#e6d5bc]">
-                    <Save size={20} />
-                  </button>
-                </div>
+                <h4 className="text-xl md:text-2xl font-serif font-bold text-[#5c4a33] leading-tight pt-2">{note.title}</h4>
               </div>
-              <input 
-                type="text" 
-                value={editState.title}
-                onChange={(e) => editState.setTitle(e.target.value)}
-                className="w-full bg-white border-4 border-[#e6d5bc] rounded-2xl px-8 py-4 focus:ring-0 focus:border-[#5c4a33] transition-all font-serif font-black text-2xl text-[#5c4a33]"
-              />
-              <textarea 
-                value={editState.content}
-                onChange={(e) => editState.setContent(e.target.value)}
-                className="w-full h-56 bg-white border-4 border-[#e6d5bc] rounded-[2.5rem] px-8 py-8 focus:ring-0 focus:border-[#5c4a33] transition-all resize-none text-xl leading-relaxed font-serif italic text-[#5c4a33]"
-              />
-            </div>
-          ) : (
-            <>
-              {/* Mood Badge - Notebook Sticker Style */}
-              <div className="absolute top-8 right-8 w-14 h-14 bg-white rounded-2xl border-4 border-[#e6d5bc] flex items-center justify-center text-3xl shadow-xl rotate-6 group-hover:rotate-12 transition-all duration-500 z-10">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-white rounded-2xl border-4 border-[#e6d5bc] flex items-center justify-center text-xl md:text-2xl shadow-lg rotate-6 group-hover:rotate-12 transition-all duration-500 shrink-0">
                 {note.mood}
               </div>
+            </div>
 
-              <div className="p-10 space-y-6">
-                <h4 className="text-3xl font-serif font-black text-[#5c4a33] leading-tight pr-16">{note.title}</h4>
-                <p className="text-[#8b7355] leading-relaxed whitespace-pre-wrap font-serif font-medium text-xl italic border-l-4 border-[#e6d5bc]/30 pl-8">
-                  "{note.content}"
-                </p>
-                
-                <div className="flex items-center justify-between pt-10 border-t-4 border-[#f5e6d3] mt-10">
-                  <div className="flex items-center gap-8">
-                    <button 
-                      onClick={onToggleLike}
-                      className={cn(
-                        "flex items-center gap-3 transition-all active:scale-90 group/heart",
-                        note.isLiked ? "text-red-500" : "text-[#8b7355]/30 hover:text-red-400"
-                      )}
-                    >
-                      <Heart size={28} fill={note.isLiked ? "currentColor" : "none"} className={cn(note.isLiked && "animate-pulse")} />
-                      <span className="text-sm font-black tracking-[0.2em]">{note.likes}</span>
-                    </button>
-                    <button 
-                      onClick={onToggleComments}
-                      className={cn(
-                        "flex items-center gap-3 transition-all group/comment",
-                        isCommentsOpen ? "text-[#5c4a33]" : "text-[#8b7355]/30 hover:text-[#5c4a33]"
-                      )}
-                    >
-                      <MessageCircle size={28} />
-                      <span className="text-sm font-black tracking-[0.2em]">{note.comments.length}</span>
-                    </button>
-                  </div>
-                  
-                  {/* Small Botanical Accent */}
-                  <div className="text-[#e6d5bc] opacity-50">
-                    <Sparkles size={24} />
-                  </div>
-                </div>
+            {/* Card Body */}
+            <div className="flex-1">
+              <p className="text-[#6d5b43] leading-relaxed whitespace-pre-wrap font-serif text-base md:text-lg italic border-l-4 border-[#e6d5bc]/50 pl-4 md:pl-6 line-clamp-4">
+                "{note.content}"
+              </p>
+            </div>
 
-                {/* Comments Section */}
-                <AnimatePresence>
-                  {isCommentsOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden pt-10 space-y-8"
-                    >
-                      <div className="space-y-6">
-                        {note.comments.map((comment) => (
-                          <div 
-                            key={comment.id} 
-                            className={cn(
-                              "flex gap-4",
-                              comment.author === currentUser ? "flex-row-reverse" : "flex-row"
-                            )}
-                          >
-                            <div className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center text-sm shadow-xl border-4 border-[#e6d5bc] shrink-0 transition-transform hover:scale-110",
-                              comment.author === 'Grinch' ? "bg-[#5c4a33] text-amber-100" : "bg-[#5c4a33] text-blue-50"
-                            )}>
-                              {comment.author === 'Grinch' ? <Trees size={18} /> : <Moon size={18} />}
-                            </div>
-                            <div className={cn(
-                              "p-5 rounded-[2rem] text-lg font-serif italic max-w-[85%] shadow-xl border-2 border-[#e6d5bc]",
-                              comment.author === currentUser ? "bg-[#5c4a33] text-[#fdfaf3]" : "bg-white text-[#8b7355]"
-                            )}>
-                              {comment.text}
-                              <div className="text-[9px] opacity-40 mt-2 uppercase font-black tracking-[0.2em]">{comment.date}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {currentUser && (
-                        <div className="relative flex gap-4 items-center bg-white p-4 rounded-[2rem] border-4 border-[#e6d5bc] shadow-inner mt-6">
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                            currentUser === 'Grinch' ? "bg-emerald-50 text-emerald-600" : "bg-pink-50 text-pink-600"
-                          )}>
-                            {currentUser === 'Grinch' ? <Trees size={20} /> : <Moon size={20} />}
-                          </div>
-                          <input 
-                            value={commentText}
-                            onChange={(e) => onCommentChange(e.target.value)}
-                            placeholder="Оставь весточку..."
-                            className="flex-1 bg-transparent border-none py-2 text-base focus:ring-0 outline-none transition-all placeholder:text-[#8b7355]/30 font-serif italic text-[#5c4a33]"
-                            onKeyDown={(e) => e.key === 'Enter' && onAddComment()}
-                          />
-                          <button 
-                            onClick={onAddComment}
-                            disabled={!commentText.trim()}
-                            className="p-4 rounded-2xl bg-[#5c4a33] text-[#fdfaf3] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 shadow-xl border-2 border-[#e6d5bc] group"
-                          >
-                            <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                          </button>
-                        </div>
-                      )}
-                    </motion.div>
+            {/* Card Footer Actions */}
+            <div className="flex items-center justify-between pt-6 border-t-2 border-[#e6d5bc]/30">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleLike();
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 transition-all active:scale-90 group/heart text-[#5c4a33] hover:scale-110"
                   )}
-                </AnimatePresence>
+                >
+                  <Heart size={22} fill="currentColor" />
+                  <span className="text-xs font-black tracking-widest">{note.likes}</span>
+                </button>
+                <div className="flex items-center gap-2 relative">
+                  <MessageCircle 
+                    size={22} 
+                    className={cn(
+                      "transition-all duration-500",
+                      hasUnreadComments ? "text-pink-500 scale-110" : "text-[#8b7355]/50"
+                    )} 
+                    fill={hasUnreadComments ? "currentColor" : "none"}
+                  />
+                  <span className={cn(
+                    "text-xs font-black tracking-widest transition-colors duration-500",
+                    hasUnreadComments ? "text-pink-600" : "text-[#8b7355]/50"
+                  )}>
+                    {note.comments.length}
+                  </span>
+                </div>
               </div>
-            </>
-          )}
-        </Card>
+              
+
+            </div>
+          </div>
       </div>
     </motion.div>
   );

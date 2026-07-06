@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Lock, User, Sparkles, ArrowRight, ChevronRight, HelpCircle, X, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useData } from '@/components/DataProvider';
 
 type Character = 'grinch' | 'cindy';
 
@@ -12,6 +13,7 @@ interface AuthProps {
 }
 
 export const AuthScreen = ({ onComplete }: AuthProps) => {
+  const { spaceConfig } = useData();
   const [step, setStep] = useState<'character' | 'password'>('character');
   const [selectedChar, setSelectedChar] = useState<Character | null>(null);
   const [password, setPassword] = useState('');
@@ -24,7 +26,9 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = selectedChar === 'grinch' ? '66658985' : '16032026';
+    if (!spaceConfig) return;
+
+    const correctPassword = selectedChar === 'grinch' ? spaceConfig.password_p1 : spaceConfig.password_p2;
     
     if (password === correctPassword) {
       if (selectedChar) onComplete(selectedChar);
@@ -34,6 +38,10 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
       setPassword('');
     }
   };
+
+  const p1Name = spaceConfig?.partner1_name || 'Гринч';
+  const p2Name = spaceConfig?.partner2_name || 'Синди Лу';
+  const spaceName = spaceConfig?.name || 'Talia';
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#fefce8] overflow-hidden">
@@ -63,7 +71,7 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
                 Добро пожаловать домой
               </motion.div>
               <h1 className="text-4xl md:text-7xl font-serif font-bold text-[#5c4a33] tracking-tight leading-tight">
-                Кто заглянул в Talia?
+                Кто заглянул в {spaceName}?
               </h1>
               <p className="text-[#8b7355] font-medium italic text-lg md:text-xl max-w-xl mx-auto px-4">
                 "Для начала выбери своего героя"
@@ -73,7 +81,7 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 max-w-4xl mx-auto px-4">
               <CharacterCard 
                 type="cindy" 
-                name="Синди Лу" 
+                name={p2Name} 
                 desc="Доброе сердце"
                 onClick={() => handleCharSelect('cindy')}
                 color="bg-pink-50"
@@ -81,7 +89,7 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
               />
               <CharacterCard 
                 type="grinch" 
-                name="Гринч" 
+                name={p1Name} 
                 desc="Злой ворчун"
                 onClick={() => handleCharSelect('grinch')}
                 color="bg-emerald-50"
@@ -117,7 +125,7 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
                 </div>
               </div>
               <div className="space-y-1">
-                <h2 className="text-3xl font-serif font-bold text-[#5c4a33]">Привет, {selectedChar === 'grinch' ? 'Гринч' : 'Синди Лу'}!</h2>
+                <h2 className="text-3xl font-serif font-bold text-[#5c4a33]">Привет, {selectedChar === 'grinch' ? p1Name : p2Name}!</h2>
                 <p className="text-[#8b7355] text-sm font-medium">Введи наш секретный ключ</p>
               </div>
             </div>
@@ -144,7 +152,7 @@ export const AuthScreen = ({ onComplete }: AuthProps) => {
                 type="submit"
                 className="w-full py-5 rounded-[2rem] bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
               >
-                Войти в Talia
+                Войти в {spaceName}
                 <ArrowRight size={20} />
               </button>
             </form>

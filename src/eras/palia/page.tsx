@@ -1,122 +1,44 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { RelationshipTimer } from "@/eras/palia/components/RelationshipTimer";
 import { WeatherWidget } from "@/eras/palia/components/WeatherWidget";
 import { PetHub } from "@/eras/palia/components/PetHub";
 import { Card } from "@/components/Card";
 import { AuthScreen, OnboardingScreen } from "@/eras/palia/components/AuthSystem";
-import { Sparkles, MessageCircle, Heart, Cookie, Timer, RefreshCw, BrainCircuit, Sparkle, Anchor, Waves, X, HelpCircle, Settings } from "lucide-react";
-import { useState, useEffect } from 'react';
+import { Sparkles, MessageCircle, Heart, Cookie, Timer, RefreshCw, BrainCircuit, Sparkle, X, HelpCircle, Settings } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from "@/lib/utils";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useData } from "@/components/DataProvider";
+import { useData } from '@/components/DataProvider';
 import { supabase } from '@/lib/supabase';
-
-const FORTUNES = [
-  "Сегодня вам суждено сделать то, на что вы долго не решались. Напиши прямо сейчас самое дерзкое сообщение из возможных. 🔥",
-  "Звезды говорят, что сегодня отличная ночь для спонтанной поездки. Куда угодно, главное — вместе. 🗺️",
-  "Секрет, который вы боялись рассказать друг другу, сегодня может стать вашей главной суперсилой. 🎭",
-  "Разрешаю вам сегодня нарушить одно самое строгое правило. Какое? Решать только вам двоим. 🎲",
-  "В ближайшие 24 часа скажи 'ДА' на любое, даже самое безумное предложение от своего партнера. 🌪️",
-  "Случайный звонок посреди ночи сегодня не просто допустим, а строго рекомендован астрологами. 🌙",
-  "Вы стоите на пороге приключения, которое начнется с одной невинной шутки. Будьте осторожны... или нет! 😉",
-  "Сегодня ваш день непослушания. Закажите вредную еду, отмените планы и сделайте что-то исключительно для себя. 🍕",
-  "Вам выпал шанс задать партнеру абсолютно любой вопрос, на который он будет обязан ответить максимально честно. 🗝️",
-  "Скоро вам предстоит испытать адреналин вместе. Подготовьтесь к учащенному сердцебиению! 💓",
-  "Ваша любовь сегодня похожа на искру у пороховой бочки. Достаточно одного горячего взгляда. 💥",
-  "Отправьте партнеру песню, которая ассоциируется у вас с вашим самым секретным воспоминанием. 🎶",
-  "Сегодня удача сопутствует смелым. Украдите поцелуй, даже если вы далеко друг от друга. Вы найдете способ. 💋",
-  "Ожидайте внезапный всплеск страсти. Сегодняшний вечер пойдет совсем не по плану, и вам это очень понравится. 🍷",
-  "Вас ждет сюрприз, от которого мурашки побегут по коже. Главное — не забудьте закрыть глаза, когда вас попросят. 🎁",
-];
-
-const INTERESTING_FACTS = [
-  "Морские выдры держатся за лапки во сне, чтобы их не унесло течением. Это помогает им не терять друг друга в океане 🦦",
-  "Пингвины Адели ищут по всему побережью самый идеальный и гладкий камешек, чтобы подарить его своей избраннице 🐧",
-  "Слоны способны узнавать свое отражение в зеркале и проявлять сочувствие к другим членам стада 🐘",
-  "Коровы заводят лучших друзей и испытывают сильный стресс, если их разлучают на долгое время 🐄",
-  "Волки выбирают пару один раз и на всю жизнь. Они верны своему партнеру до самого конца 🐺",
-  "Пчелы могут передавать друг другу информацию о лучших местах с цветами с помощью специального 'танца' 🐝",
-  "Белки ежегодно сажают тысячи деревьев, просто забывая, куда они спрятали свои орехи 🐿️",
-  "У дельфинов есть имена друг для друга — они используют уникальный свист, чтобы звать конкретного сородича 🐬",
-  "Морские коньки плавают парами, сцепившись хвостами, чтобы их не разделило морское течение 🌊",
-  "Сердца китов настолько огромны, что человек мог бы плавать по их артериям 🐋",
-  "Вороны очень умны и могут запоминать лица людей на долгие годы, передавая эту информацию своим детям 🐦",
-  "Кошки почти никогда не мяукают друг другу. Этот звук они используют специально для общения с людьми 🐱",
-  "Свет далеких звезд, который мы видим ночью, часто принадлежит звездам, которые погасли миллионы лет назад ✨",
-  "В Японии существует искусство Кинцуги — починка разбитой посуды золотом, что делает трещины частью красоты 🏺",
-  "Некоторые виды медуз технически бессмертны — они могут возвращаться в стадию полипа и начинать жизнь заново 🪼",
-  "Скорпионы светятся в темноте под ультрафиолетовым светом неоновым голубым цветом 🦂",
-  "У осьминогов три сердца, а их кровь имеет голубой цвет из-за высокого содержания меди 🐙",
-  "Тигры имеют полосатую не только шерсть, но и саму кожу под ней. Рисунок каждой особи уникален 🐅",
-  "Ленивцы могут задерживать дыхание под водой до 40 минут — дольше, чем дельфины 🦥",
-  "В космосе царит абсолютная тишина, так как там нет воздуха, чтобы проводить звуковые волны 🌌",
-  "Самое старое дерево на Земле — сосна Мафусаил, которой более 4800 лет. Она видела рассвет цивилизаций 🌳",
-  "Снег на самом деле не белый, он прозрачный. Мы видим его белым из-за отражения света кристаллами льда ❄️",
-  "Улитки могут спать до трех лет, если условия окружающей среды становятся слишком суровыми 🐌",
-  "Бабочки чувствуют вкус ногами — так они понимают, подходит ли лист для того, чтобы отложить на него яйца 🦋",
-  "Гроза на Юпитере может длиться веками. Великое Красное Пятно — это шторм, который не утихает уже 350 лет 🌀",
-];
-
-const BOTTLE_MESSAGES = [
-  "Полиночка, помни, что твоя семья и друзья безумно тебя любят и гордятся каждым твоим шагом. Ты — их главная радость! 🌸",
-  "Где-то в мире сегодня проснулся маленький пушистик, чья жизнь станет лучше благодаря твоему доброму сердцу. Свети ярко! 🐾",
-  "Даже если день кажется сложным, вспомни о тех, кто всегда готов подставить плечо. Мы все верим в тебя и твою невероятную силу! ✨",
-  "Милая Полина, твоя улыбка делает этот мир теплее. Никогда не сомневайся в себе — ты вдохновляешь окружающих одним своим присутствием! ❤️",
-  "В мире еще столько мокрых носиков, которые ждут твоей ласки. Набирайся сил и помни, что ты делаешь невероятно важное дело! 🐕",
-  "Твои близкие всегда рядом, даже если физически далеко. Закрой глаза и почувствуй, как сильно тебя любят! 🌟",
-  "Полина, твое сердце больше, чем океан. И пусть иногда бывает тяжело, знай: ты делаешь этот мир лучше для своей семьи, друзей и беззащитных малышей. 🌊",
-  "Вдох-выдох... Ты справляешься лучше, чем думаешь! Позвони родителям или близкой подруге — они будут счастливы просто услышать твой голос. 📞",
-  "Никогда не забывай, какая ты потрясающая! Твоя забота спасает, твоя любовь исцеляет. Продолжай сиять, Полиночка! ☀️",
-  "Сегодня отличный день, чтобы поверить в свои силы так же сильно, как в тебя верят самые родные люди. Обнимаем крепко-крепко! 🫂",
-];
+import { useEra } from '@/context/EraContext';
 
 export default function Home() {
   const router = useRouter();
-  const { dailyFact } = useData();
+  const { dailyFact, dailyCookie, currentUser } = useData();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  const [bottleMessage, setBottleMessage] = useState<string | null>(null);
-  const [isBottleOpen, setIsBottleOpen] = useState(false);
-  const [hasUnreadBottle, setHasUnreadBottle] = useState(false);
-
   useEffect(() => {
     const auth = localStorage.getItem('lumina_auth');
+    console.log('PaliaDashboard Auth Check:', { auth });
     if (auth && !window.location.search.includes('reset')) {
       setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
     }
-  }, []);
-
-  useEffect(() => {
-    const checkBottle = async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('global_state').select('value').eq('key', 'bottle_state').single();
-      
-      let currentMsg = BOTTLE_MESSAGES[Math.floor(Math.random() * BOTTLE_MESSAGES.length)];
-      if (data && data.value) {
-        const state = data.value;
-        if (state.day === today) {
-          currentMsg = state.message || currentMsg;
-          setHasUnreadBottle(state.readDay !== today);
-        } else {
-          setHasUnreadBottle(true);
-          await supabase.from('global_state').upsert({ key: 'bottle_state', value: { message: currentMsg, day: today, readDay: null } });
-        }
-      } else {
-        setHasUnreadBottle(true);
-        await supabase.from('global_state').upsert({ key: 'bottle_state', value: { message: currentMsg, day: today, readDay: null } });
-      }
-      setBottleMessage(currentMsg);
-    };
-    checkBottle();
   }, []);
 
   const handleAuthComplete = (user: string) => {
     localStorage.setItem('lumina_auth', user);
+    // Устанавливаем куку для middleware (срок действия 30 дней)
+    document.cookie = `lumina_auth=${user}; path=/; max-age=${30 * 24 * 60 * 60}; SameSite=Lax`;
     setIsAuthenticated(true);
+    
+    // Force reload to update AuthGuard and Middleware state
+    window.location.reload();
     
     const hasSeenOnboarding = localStorage.getItem('lumina_onboarding_seen');
     if (!hasSeenOnboarding) {
@@ -130,134 +52,120 @@ export default function Home() {
     setShowOnboarding(false);
   };
 
-  const openBottle = async () => {
-    setIsBottleOpen(true);
-    setHasUnreadBottle(false);
-    const today = new Date().toISOString().split('T')[0];
 
-    await supabase.from('global_state').upsert({
-      key: 'bottle_state',
-      value: { message: bottleMessage, day: today, readDay: today }
-    });
-  };
 
   if (!isAuthenticated) {
     return <AuthScreen onComplete={handleAuthComplete} />;
   }
 
   return (
-    <>
+    <div className="relative min-h-screen bg-[#fdfaf3]">
+      {/* Background Decor */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#f0f9ff]/50 via-transparent to-[#fdf2f8]/50" />
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#0ea5e9]/5 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#ec4899]/5 rounded-full blur-[120px]" />
+      </div>
+      
       <AnimatePresence>
         {showOnboarding && (
           <OnboardingScreen onComplete={handleOnboardingComplete} />
         )}
       </AnimatePresence>
 
-      <div className="max-w-4xl mx-auto px-4 pt-12 pb-32 space-y-8">
-        {/* Floating Bottle Section */}
-        <div className="fixed bottom-28 right-6 z-[100] md:bottom-32 md:right-12">
-          <motion.button
-            whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
-            whileTap={{ scale: 0.9 }}
-            onClick={openBottle}
-            className="relative group"
-          >
-            <div className="absolute -inset-4 bg-cyan-200/30 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-[2rem] shadow-xl border-4 border-cyan-100 flex items-center justify-center text-cyan-500 relative z-10">
-              <motion.div
-                animate={{ 
-                  y: [0, -5, 0],
-                  rotate: [0, 5, -5, 0]
-                }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <Waves size={32} className="absolute -bottom-1 -right-1 opacity-20" />
-                <Anchor size={28} className="relative z-10" />
-              </motion.div>
-            </div>
-            
-            <AnimatePresence>
-              {hasUnreadBottle && (
-                <motion.div 
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0 }}
-                  className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px] font-bold shadow-lg z-20"
-                >
-                  1
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.button>
+      {/* Mobile Top Header (Hidden on Desktop) */}
+      <div className="md:hidden sticky top-0 z-[100] w-full px-6 pt-6 pb-4 bg-[#fdfaf3]/80 backdrop-blur-md flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#5c4a33] text-[#fdfaf3] flex items-center justify-center shadow-lg border-2 border-[#e6d5bc]">
+            <Heart size={20} fill="currentColor" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-[#5c4a33] leading-none">{currentUser === 'Cindy' ? 'Polina' : 'Karim'}</h2>
+            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#8b7355]/60 mt-0.5">Эра Талии</p>
+          </div>
         </div>
-
-        <AnimatePresence>
-          {isBottleOpen && (
-            <div className="fixed inset-0 z-[250] flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsBottleOpen(false)}
-                className="absolute inset-0 bg-black/40 backdrop-blur-md"
-              />
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="relative w-full max-w-lg bg-[#fdfaf3] rounded-[3rem] border-8 border-[#e6d5bc] shadow-2xl overflow-hidden p-8 md:p-12 text-center space-y-8"
-              >
-                <div className="absolute top-0 left-0 right-0 h-32 bg-cyan-100/50 -z-10" />
-                <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl border-4 border-cyan-100 flex items-center justify-center text-cyan-500 mx-auto">
-                  <Waves size={48} />
-                </div>
-                
-                <div className="space-y-4">
-                  <h3 className="text-3xl font-serif font-bold text-[#5c4a33]">Послание в бутылке</h3>
-                  <div className="p-6 bg-white rounded-2xl border-2 border-[#e6d5bc] shadow-inner italic text-lg text-[#5c4a33] font-medium leading-relaxed">
-                    "{bottleMessage}"
-                  </div>
-                </div>
-
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#8b7355] opacity-60">
-                  Это послание приплыло к тебе сегодня и исчезнет на рассвете...
-                </p>
-
-                <button 
-                  onClick={() => setIsBottleOpen(false)}
-                  className="w-full py-4 rounded-2xl bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-widest text-xs shadow-xl hover:scale-105 active:scale-95 transition-all"
-                >
-                  Закрыть и сохранить в сердце
-                </button>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        <header className="text-center space-y-4 relative">
-          <Link href="/admin" className="absolute -top-4 right-0 p-3 bg-[#e6d5bc]/20 rounded-2xl text-[#8b7355] hover:bg-[#e6d5bc]/40 transition-all group">
-            <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500" />
+        <div className="flex items-center gap-2">
+          <Link href="/about" className="p-2 rounded-xl bg-[#f5e6d3] text-[#5c4a33] border-2 border-[#e6d5bc] shadow-sm">
+            <HelpCircle size={20} />
           </Link>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 pb-40 md:pb-52 space-y-8 md:space-y-10 relative z-10">
+
+        <header className="hidden md:flex flex-col md:flex-row items-center justify-between gap-6 relative pt-6 pb-2 px-4 md:px-0">
+          {/* Left side: Logo & Brand Element */}
+          <div className="flex items-center gap-4">
+            <Link href="/" className="shrink-0">
+              <motion.div 
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-14 h-14 md:w-16 md:h-16 rounded-[1.5rem] bg-[#5c4a33] text-[#fdfaf3] flex items-center justify-center shadow-xl border-4 border-[#e6d5bc] relative overflow-hidden group"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-pink-400/20 to-purple-400/20 group-hover:opacity-100 opacity-0 transition-opacity duration-300" />
+                <Heart size={28} fill="currentColor" className="relative z-10" />
+              </motion.div>
+            </Link>
+            <div className="hidden md:block">
+              <h2 className="text-2xl font-black text-[#5c4a33] tracking-tight">{currentUser === 'Cindy' ? 'Polina' : 'Karim'}</h2>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#8b7355]/60">Эра Талии</p>
+            </div>
+          </div>
+
+          {/* Center: Title */}
+          <div className="text-center space-y-2">
+            <Link href="/about">
+              <motion.h1 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="text-5xl md:text-6xl font-serif font-bold text-[#5c4a33] tracking-tight cursor-pointer select-none inline-block drop-shadow-lg"
+              >
+                Talia
+              </motion.h1>
+            </Link>
+            <p className="text-sm md:text-base text-[#8b7355]/70 font-medium">
+              Время вместе, которое никогда не закончится
+            </p>
+          </div>
+
+          {/* Right side: Admin Panel Button - DISABLED */}
+          <div className="shrink-0 opacity-50 grayscale cursor-not-allowed">
+            <motion.button
+              disabled
+              className="flex items-center gap-3 px-6 py-4 bg-[#5c4a33] text-[#fdfaf3] border-4 border-[#e6d5bc] rounded-[1.5rem] shadow-xl transition-all duration-300 group cursor-not-allowed"
+            >
+              <div className="p-2 bg-white/10 rounded-xl transition-colors">
+                <Settings size={20} />
+              </div>
+              <div className="text-left hidden md:block">
+                <span className="text-[11px] font-black uppercase tracking-[0.3em] block">Управление</span>
+                <span className="text-[10px] opacity-70 block">Недоступно</span>
+              </div>
+            </motion.button>
+          </div>
+        </header>
+
+        {/* Mobile Main Hero (Centered Title) */}
+        <div className="md:hidden text-center space-y-2 py-4">
           <Link href="/about">
             <motion.h1 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="text-5xl font-serif font-bold text-[#5c4a33] tracking-tight cursor-pointer select-none inline-block"
+              className="text-6xl font-serif font-bold text-[#5c4a33] tracking-tight drop-shadow-md"
             >
               Talia
             </motion.h1>
           </Link>
-          <p className="text-[#8b7355] italic font-medium tracking-wide">
-            "Наш уютный уголок магии и воспоминаний"
+          <p className="text-xs text-[#8b7355]/70 font-medium italic">
+            "Время вместе, которое никогда не закончится"
           </p>
-        </header>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-10">
           <RelationshipTimer />
           <WeatherWidget />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 auto-rows-[minmax(180px,auto)]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-10 auto-rows-auto">
           {/* Pinterest-like layout */}
           <div className="md:col-span-2 md:row-span-1">
             <PetHub />
@@ -268,32 +176,38 @@ export default function Home() {
           </div>
 
           <div className="md:col-span-3">
-            <Card delay={0.1} className="relative flex flex-col md:flex-row items-center justify-between gap-6 py-10 px-6 md:px-12 bg-[#fdfaf3] border-4 border-[#e6d5bc] shadow-2xl rounded-[2.5rem] overflow-hidden group">
-              <div className="flex items-center gap-8 z-10 w-full md:w-auto">
-                <div className="p-5 rounded-3xl bg-[#f5e6d3] text-[#5c4a33] shadow-xl border-4 border-[#e6d5bc] group-hover:rotate-6 transition-transform duration-500 shrink-0">
-                  <BrainCircuit size={40} />
+            <div className="bg-[#fdfaf3] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[10px_10px_30px_rgba(0,0,0,0.06)] md:shadow-[15px_15px_40px_rgba(0,0,0,0.08)] p-6 md:p-12 rounded-[2rem] md:rounded-[3.5rem] relative overflow-hidden group">
+              {/* Paper texture overlay */}
+              <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+              
+              <div className="flex flex-col md:flex-row items-center gap-4 md:gap-10 z-10 w-full relative">
+                <div className="p-4 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] bg-gradient-to-br from-[#f5e6d3] to-[#e6d5bc] text-[#5c4a33] shadow-xl md:shadow-2xl border-2 md:border-4 border-[#e6d5bc] transition-transform duration-500 shrink-0 relative overflow-hidden">
+                   <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />
+                   <BrainCircuit size={36} className="md:hidden" />
+                   <BrainCircuit size={72} className="hidden md:block" />
                 </div>
-                <div className="space-y-2 text-left">
-                  <h3 className="font-black uppercase tracking-[0.3em] text-[10px] text-[#8b7355] flex items-center gap-2">
-                    <Sparkle size={12} className="text-amber-500" />
-                    Интересный факт
-                  </h3>
-                  <p className="text-xl md:text-2xl font-serif italic text-[#5c4a33] leading-relaxed max-w-2xl font-bold">
-                    "{dailyFact || "Морские выдры держатся за лапки во сне, чтобы их не унесло течением... 🦦"}"
+                <div className="flex-1 space-y-2 md:space-y-4 z-10 text-center md:text-left">
+                  <p className="text-base md:text-3xl font-serif font-bold text-[#5c4a33] leading-[1.4] italic drop-shadow-sm">
+                    {dailyFact || "Каждый день — это новая возможность узнать что-то удивительное вместе."}
                   </p>
+                  <div className="pt-1">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#5c4a33]/5 rounded-full border border-[#e6d5bc]/40 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-[#8b7355]">
+                      <Sparkle size={10} className="text-amber-500" />
+                      Факт дня для вас двоих
+                    </span>
+                  </div>
                 </div>
               </div>
-              
-              <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
-            </Card>
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
 function FortuneCard() {
+  const { dailyCookie } = useData();
   const [fortune, setFortune] = useState<string | null>(null);
   const [isBreaking, setIsBreaking] = useState(false);
   const [nextCookieTime, setNextCookieTime] = useState<number | null>(null);
@@ -341,7 +255,7 @@ function FortuneCard() {
   const breakCookie = async () => {
     setIsBreaking(true);
     setTimeout(async () => {
-      const randomFortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+      const randomFortune = dailyCookie || "Полинка, помни, что я всегда рядом с тобой, в любую минуту и в любой ситуации, ты никогда не будешь одна !!";
       const nextTime = new Date().getTime() + 24 * 60 * 60 * 1000;
       
       setFortune(randomFortune);
@@ -356,18 +270,22 @@ function FortuneCard() {
   };
 
   return (
-    <Card delay={0.2} className="relative h-full flex flex-col items-center justify-between bg-[#fdfaf3] border-4 border-[#e6d5bc] shadow-2xl p-8 rounded-[2rem] overflow-hidden group">
-      <div className="w-full flex justify-between items-start">
+    <div className="relative h-full flex flex-col items-center justify-between bg-[#fdfaf3] border-4 md:border-8 border-[#e6d5bc]/30 shadow-[10px_10px_30px_rgba(0,0,0,0.06)] md:shadow-[15px_15px_40px_rgba(0,0,0,0.08)] p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] overflow-hidden group">
+      {/* Texture Overlay */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
+      
+      <div className="w-full flex justify-between items-start relative z-10">
         <div className="text-left">
-          <h3 className="text-2xl font-serif font-bold text-[#5c4a33]">Fortune</h3>
-          <p className="text-[9px] font-black text-[#8b7355] uppercase tracking-widest">Печенье Talia</p>
+          <h3 className="text-2xl md:text-3xl font-serif font-bold text-[#5c4a33]">Fortune</h3>
+          <p className="text-[9px] md:text-[11px] font-black text-[#8b7355] uppercase tracking-[0.3em]">Печенье Talia</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-[#f5e6d3] flex items-center justify-center text-[#5c4a33] border-2 border-[#e6d5bc]">
-          <Cookie size={20} />
+        <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-[#f5e6d3] flex items-center justify-center text-[#5c4a33] border-2 md:border-4 border-[#e6d5bc]">
+          <Cookie size={20} className="md:hidden" />
+          <Cookie size={28} className="hidden md:block" />
         </div>
       </div>
 
-      <div className="relative py-4 flex flex-col items-center">
+      <div className="relative py-4 md:py-6 flex flex-col items-center relative z-10 w-full">
         <AnimatePresence mode="wait">
           {isLoading ? (
             <motion.div
@@ -375,10 +293,10 @@ function FortuneCard() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-4"
+              className="flex flex-col items-center gap-2 md:gap-4"
             >
               <RefreshCw className="animate-spin text-[#e6d5bc]" size={40} />
-              <p className="text-[10px] font-black uppercase text-[#8b7355] opacity-40">Загрузка судьбы...</p>
+              <p className="text-[9px] md:text-[11px] font-black uppercase text-[#8b7355] opacity-40 tracking-[0.2em]">Загрузка судьбы...</p>
             </motion.div>
           ) : !fortune ? (
             <motion.div
@@ -392,23 +310,23 @@ function FortuneCard() {
                 animate={isBreaking ? { 
                   rotate: [0, -10, 10, -10, 10, 0],
                   scale: [1, 1.1, 0.9, 1.1, 1]
-                } : { y: [0, -5, 0] }}
+                } : { y: [0, -8, 0] }}
                 transition={isBreaking ? { duration: 0.8 } : { duration: 4, repeat: Infinity }}
-                className="w-24 h-24 bg-gradient-to-br from-amber-100 to-amber-200 rounded-[2rem] flex items-center justify-center text-amber-700 shadow-xl border-4 border-[#e6d5bc]"
+                className="w-24 h-24 md:w-32 md:h-32 bg-gradient-to-br from-amber-100 to-amber-200 rounded-[2rem] md:rounded-[2.5rem] flex items-center justify-center text-amber-700 shadow-xl border-4 md:border-8 border-[#e6d5bc]"
               >
-                <Cookie size={48} />
+                <Cookie size={48} className="md:hidden" />
+                <Cookie size={64} className="hidden md:block" />
               </motion.div>
-              <div className="absolute -inset-2 border-2 border-dashed border-[#e6d5bc] rounded-[2.5rem] animate-[spin_20s_linear_infinite]" />
+              <div className="absolute -inset-3 md:-inset-4 border border-dashed md:border-2 border-[#e6d5bc] rounded-[2.5rem] md:rounded-[3rem] animate-[spin_20s_linear_infinite]" />
             </motion.div>
           ) : (
             <motion.div
               key="fortune-text"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white p-6 rounded-2xl border-4 border-[#e6d5bc] shadow-lg relative"
+              className="bg-white p-4 md:p-8 rounded-xl md:rounded-2xl border-2 md:border-4 border-[#e6d5bc] shadow-lg relative w-full"
             >
-              <Sparkles className="absolute -top-3 -right-3 text-amber-400" size={24} />
-              <p className="text-sm text-[#5c4a33] italic leading-relaxed font-bold text-center">
+              <p className="text-sm md:text-lg text-[#5c4a33] italic leading-relaxed font-bold text-center">
                 "{fortune}"
               </p>
             </motion.div>
@@ -416,30 +334,31 @@ function FortuneCard() {
         </AnimatePresence>
       </div>
 
-      <div className="w-full">
+      <div className="w-full relative z-10">
         {isLoading ? (
-          <div className="w-full py-4 rounded-2xl bg-[#e6d5bc]/30 border-2 border-dashed border-[#e6d5bc]" />
+          <div className="w-full py-4 md:py-5 rounded-xl md:rounded-2xl bg-[#e6d5bc]/30 border-2 md:border-3 border-dashed border-[#e6d5bc]" />
         ) : !fortune ? (
           <button 
             onClick={breakCookie}
             disabled={isBreaking}
-            className="w-full py-4 rounded-2xl bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-widest text-[10px] hover:bg-[#4a3b29] transition-all shadow-lg active:scale-95 disabled:opacity-50"
+            className="w-full py-3.5 md:py-5 rounded-xl md:rounded-2xl bg-[#5c4a33] text-[#fdfaf3] font-black uppercase tracking-[0.2em] md:tracking-[0.25em] text-[10px] md:text-sm hover:bg-[#4a3b29] transition-all shadow-xl active:scale-95 disabled:opacity-50"
           >
             {isBreaking ? "Разламываю..." : "Разломить печенье"}
           </button>
         ) : (
-          <div className="flex flex-col items-center gap-1.5 py-2">
-            <div className="flex items-center gap-2 px-4 py-1.5 bg-[#f5e6d3] rounded-full border-2 border-[#e6d5bc]">
-              <Timer size={12} className="text-[#8b7355]" />
-              <span className="text-[9px] font-black text-[#8b7355] uppercase tracking-widest">{timeLeft}</span>
+          <div className="flex flex-col items-center gap-2 py-2 md:py-3">
+            <div className="flex items-center gap-2 md:gap-3 px-4 md:px-6 py-2 md:py-2.5 bg-[#f5e6d3] rounded-full border-2 md:border-4 border-[#e6d5bc]">
+              <Timer size={14} className="text-[#8b7355] md:hidden" />
+              <Timer size={16} className="text-[#8b7355] hidden md:block" />
+              <span className="text-xs md:text-sm font-black text-[#5c4a33] tabular-nums tracking-widest">{timeLeft}</span>
             </div>
-            <p className="text-[8px] text-[#8b7355]/60 font-bold uppercase">До следующего предсказания</p>
+            <p className="text-[8px] md:text-[9px] font-black uppercase text-[#8b7355] opacity-60 tracking-widest">
+              До следующего печенья
+            </p>
           </div>
         )}
       </div>
-
-      <div className="absolute inset-0 pointer-events-none opacity-[0.05] bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')]" />
-    </Card>
+    </div>
   );
 }
 
@@ -463,7 +382,6 @@ const FAQModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void })
     {
       title: "✨ Магические Механики",
       items: [
-        { q: "Послание в бутылке", a: "Каждый день в океан Talia приплывает новая записка. Это короткие послания, которые живут всего 24 часа." },
         { q: "Печенье Судьбы", a: "Разламывай его раз в сутки, чтобы получить смелое и вдохновляющее предсказание для вас двоих." },
         { q: "Таймер Связи", a: "Он считает каждую секунду с того момента, как вы решили быть вместе. Это ваше общее время." }
       ]
@@ -485,7 +403,7 @@ const FAQModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void })
             initial={{ opacity: 0, scale: 0.9, y: 50 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 50 }}
-            className="relative w-full max-w-4xl max-h-[90vh] bg-[#fdfaf3] rounded-[3rem] border-8 border-[#e6d5bc] shadow-2xl overflow-hidden flex flex-col"
+            className="relative w-full max-w-4xl max-h-[90vh] bg-[#fdfaf3] rounded-[3rem] border-8 border-[#e6d5bc] shadow-[15px_15px_40px_rgba(0,0,0,0.08)] overflow-hidden flex flex-col"
           >
             {/* Header */}
             <div className="p-6 md:p-12 bg-[#f5e6d3] border-b-4 border-[#e6d5bc] relative shrink-0">
@@ -493,7 +411,7 @@ const FAQModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void })
                 <X size={32} className="text-[#5c4a33]" />
               </button>
               <div className="space-y-2">
-                <div className="inline-flex px-4 py-1.5 rounded-full bg-[#5c4a33] text-[#fdfaf3] text-[10px] font-black uppercase tracking-[0.2em]">
+                <div className="inline-flex px-4 py-1.5 rounded-full bg-[#5c4a33] text-[#fdfaf3] text-[11px] font-black uppercase tracking-[0.3em]">
                   Путеводитель по миру
                 </div>
                 <h2 className="text-4xl md:text-6xl font-serif font-bold text-[#5c4a33] tracking-tight">Библиотека Talia</h2>
@@ -513,7 +431,7 @@ const FAQModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void })
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {cat.items.map((item, i) => (
                       <div key={i} className="bg-white p-6 rounded-[2rem] border-4 border-[#e6d5bc] shadow-sm space-y-3">
-                        <p className="font-black uppercase text-[10px] tracking-widest text-[#8b7355] flex items-center gap-2">
+                        <p className="font-black uppercase text-[11px] tracking-widest text-[#8b7355] flex items-center gap-2">
                           <HelpCircle size={14} className="text-amber-500" />
                           {item.q}
                         </p>

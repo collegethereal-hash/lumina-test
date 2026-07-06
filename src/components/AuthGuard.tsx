@@ -13,7 +13,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const authorized = !!auth;
     setIsAuthorized(authorized);
 
+    console.log('AuthGuard Check:', { authorized, pathname, auth });
+
     if (!authorized && pathname !== '/') {
+      console.log('AuthGuard: Not authorized, redirecting to /');
       router.push('/');
     }
   }, [pathname, router]);

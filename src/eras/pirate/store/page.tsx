@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Coins, Users, Sword, Ship, Anchor, Shield, Navigation, 
-  Beer, Crosshair, Wind, Flame, Skull, Settings, Hammer, Gem, Sparkles
+  Beer, Crosshair, Wind, Flame, Skull, Settings, Hammer, Gem, Sparkles,
+  ChevronDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Chest3D from "@/eras/pirate/components/Chest3D";
 
 export default function PirateStore() {
   const [gold, setGold] = useState(1500);
@@ -14,6 +16,7 @@ export default function PirateStore() {
   const [inventory, setInventory] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'crew' | 'shipyard' | 'blacksmith'>('crew');
   const [notification, setNotification] = useState<string | null>(null);
+  const [isChestOpen, setIsChestOpen] = useState(false);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -23,6 +26,10 @@ export default function PirateStore() {
     if (savedGold) setGold(parseInt(savedGold, 10));
     if (savedCrew) setCrew(parseInt(savedCrew, 10));
     if (savedInv) setInventory(JSON.parse(savedInv));
+    
+    // Auto-open chest after a short delay for effect
+    const timer = setTimeout(() => setIsChestOpen(true), 1000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Save state to localStorage when it changes
@@ -52,8 +59,11 @@ export default function PirateStore() {
           setGold(prev => prev + item.price); // Refund
         }
       }
+      // Play some visual feedback (could be a sound if we had a sound manager)
     } else {
       showNotification('Не хватает дублонов!');
+      setIsChestOpen(false); // Close chest if poor
+      setTimeout(() => setIsChestOpen(true), 1000); // Re-open as a "taunt"
     }
   };
 
@@ -79,7 +89,7 @@ export default function PirateStore() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#0a0a0a] text-amber-100 font-serif pb-32 overflow-hidden">
+    <div className="relative min-h-screen bg-[#0a0a0a] text-amber-100 font-serif overflow-hidden">
       
       {/* Background Ambience */}
       <div className="absolute inset-0 pointer-events-none z-0">
@@ -88,13 +98,13 @@ export default function PirateStore() {
         <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(245,158,11,0.05)_0%,transparent_50%)]" />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-12 space-y-12">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-12 pb-40 space-y-12">
         
         {/* Header & Stats */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
            <div className="text-center md:text-left space-y-2">
               <h1 className="text-6xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-amber-200 via-amber-500 to-amber-700 drop-shadow-lg">
-                Черный Рынок
+                Королевская Казна
               </h1>
               <p className="text-amber-500/50 italic tracking-widest text-lg">"Золото не имеет запаха, пока ты не купишь на него ром!"</p>
            </div>
@@ -105,8 +115,17 @@ export default function PirateStore() {
                    <Coins size={24} />
                  </div>
                  <div>
-                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/40">Казна</p>
-                   <p className="text-3xl font-bold text-amber-400 leading-none">{gold}</p>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/40">Золото</p>
+                   <AnimatePresence mode="wait">
+                     <motion.p 
+                       key={gold}
+                       initial={{ y: 10, opacity: 0 }}
+                       animate={{ y: 0, opacity: 1 }}
+                       className="text-3xl font-bold text-amber-400 leading-none"
+                     >
+                       {gold}
+                     </motion.p>
+                   </AnimatePresence>
                  </div>
               </div>
               <div className="flex items-center gap-4 px-6">
@@ -118,6 +137,22 @@ export default function PirateStore() {
                    <p className="text-3xl font-bold text-blue-400 leading-none">{crew}</p>
                  </div>
               </div>
+           </div>
+        </div>
+
+        {/* 3D Chest Section */}
+        <div className="relative w-full h-80 bg-gradient-to-b from-transparent via-amber-900/5 to-transparent rounded-[3rem] overflow-hidden group cursor-pointer"
+             onClick={() => setIsChestOpen(!isChestOpen)}>
+           <div className="absolute inset-0 flex items-center justify-center">
+             <div className="w-full h-full max-w-md">
+                <Chest3D isOpen={isChestOpen} goldAmount={gold} />
+             </div>
+           </div>
+           
+           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-center pointer-events-none">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500/40 group-hover:text-amber-500/80 transition-colors">
+                {isChestOpen ? "Кликни, чтобы закрыть" : "Кликни, чтобы открыть"}
+              </p>
            </div>
         </div>
 

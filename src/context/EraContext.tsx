@@ -8,6 +8,8 @@ interface EraContextType {
   currentEra: EraType;
   setEra: (era: EraType) => Promise<void>;
   isLoading: boolean;
+  isUIHidden: boolean;
+  setIsUIHidden: (hidden: boolean) => void;
 }
 
 const EraContext = createContext<EraContextType | undefined>(undefined);
@@ -15,25 +17,31 @@ const EraContext = createContext<EraContextType | undefined>(undefined);
 export function EraProvider({ children }: { children: React.ReactNode }) {
   const [currentEra, setCurrentEra] = useState<EraType>('palia');
   const [isLoading, setIsLoading] = useState(true);
+  const [isUIHidden, setIsUIHidden] = useState(false);
 
   useEffect(() => {
     const fetchEra = async () => {
       try {
+        // 1. Сначала проверяем localStorage для мгновенной загрузки
+        const savedEra = localStorage.getItem('lumina_era') as EraType;
+        if (savedEra && (savedEra === 'palia' || savedEra === 'pirate')) {
+          setCurrentEra(savedEra);
+        }
+
+        // 2. Получаем актуальную эпоху из Supabase
         const { data, error } = await supabase
           .from('global_state')
           .select('value')
           .eq('key', 'current_era')
-          .single();
+          .maybeSingle();
 
-        if (data && data.value) {
-          setCurrentEra(data.value as EraType);
-        } else {
-          // If not in DB, check localStorage
-          const localEra = localStorage.getItem('lumina_era') as EraType;
-          if (localEra) setCurrentEra(localEra);
+        if (data?.value && (data.value === 'palia' || data.value === 'pirate')) {
+          const eraValue = data.value as EraType;
+          setCurrentEra(eraValue);
+          localStorage.setItem('lumina_era', eraValue);
         }
-      } catch (e) {
-        console.error('Error fetching era:', e);
+      } catch (err) {
+        console.error('Error fetching era:', err);
       } finally {
         setIsLoading(false);
       }
@@ -64,7 +72,7 @@ export function EraProvider({ children }: { children: React.ReactNode }) {
   }, [currentEra]);
 
   return (
-    <EraContext.Provider value={{ currentEra, setEra, isLoading }}>
+    <EraContext.Provider value={{ currentEra, setEra, isLoading, isUIHidden, setIsUIHidden }}>
       {children}
     </EraContext.Provider>
   );

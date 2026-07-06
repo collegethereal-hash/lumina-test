@@ -7,33 +7,49 @@ import {
   Anchor, Shield, Hammer, Package, Beer, 
   CloudLightning, Scroll, Wind, Coins, CheckCircle2,
   Sparkles, Send, MessageCircle, RefreshCw, Trash2,
-  User, Volume2, ShieldAlert, Settings
+  User, Volume2, ShieldAlert, Settings, Flame, Trees
 } from 'lucide-react';
-import { cn } from "@/lib/utils";
-import { useData } from "@/components/DataProvider";
-import BayScene from "@/eras/pirate/components/BayScene";
+import { cn } from '@/lib/utils';
+import { useData } from '@/components/DataProvider';
+import BayScene from '@/eras/pirate/components/BayScene';
 import { chatWithKoko } from '@/app/actions/koko';
+import type { AIModelType } from '@/lib/ai';
+
+import { PirateAuth } from '@/eras/pirate/components/PirateAuth';
+
+import { PirateNavbar } from '@/eras/pirate/components/PirateNavbar';
+import { useEra } from '@/context/EraContext';
 
 export default function PirateDashboard() {
-  const { currentUser } = useData();
-  const [activeTab, setActiveTab] = useState<'ship' | 'koko'>('ship');
+  const { currentUser, spaceConfig, isLoading: isDataLoading } = useData();
+  const { setEra } = useEra();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<'koko'>('koko');
+  
+  const switchToTalia = async () => {
+    await setEra('palia');
+  };
+  const [kokoMode, setKokoMode] = useState<'personal' | 'shared'>('shared');
+  const [aiModel, setAiModel] = useState<AIModelType>('qwen/qwen3.5-122b-a10b');
   const [notification, setNotification] = useState<string | null>(null);
+  
+  // Переключатель: чат от лица Синди / чат от лица Гринча (только в shared mode)
+  const [sharedChatPerspective, setSharedChatPerspective] = useState<'cindy' | 'grinch'>('cindy');
+  
+  // Определяем, какой пользователь сейчас
+  const isCindy = currentUser === 'Cindy';
+  const isGrinch = currentUser === 'Grinch';
   
   // Mounted check for Hydration-safe R3F Canvas
   const [isMounted, setIsMounted] = useState(false);
-
-  // Ship stats
-  const [hull, setHull] = useState(62);
-  const [hold, setHold] = useState(85);
-  const [morale, setMorale] = useState(94);
 
   // Economy
   const [gold, setGold] = useState(1500);
 
   // Coco Chatbot State
   const [message, setMessage] = useState('');
-  const [chat, setChat] = useState<{ role: 'user' | 'koko'; text: string }[]>([
-    { role: 'koko', text: 'Каррр! Я Коко, твой личный пиратский психолог-терапевт. Какая буря настигла твоё сердце сегодня, Гринч? Расскажи мне, и мы проложим верный курс! 🦜🌊' }
+  const [chat, setChat] = useState<{ role: 'user' | 'koko' | 'grinch' | 'cindy'; text: string; hidden?: boolean }[]>([
+    { role: 'koko', text: 'Привет! Я Коко, тут, чтобы выслушать и помочь разобраться. Что у тебя на сердце?' }
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -47,21 +63,31 @@ export default function PirateDashboard() {
   useEffect(() => {
     setIsMounted(true);
     
+    // Set background color to match the pirate theme parchment
+    document.body.style.backgroundColor = '#f4ebd0';
+    
+    const savedAuth = localStorage.getItem('lumina_auth');
+    console.log('PirateDashboard Auth Check:', { savedAuth });
+    setIsAuthenticated(!!savedAuth);
+
     const loadStats = () => {
       const savedGold = localStorage.getItem('pirate_gold');
-      const savedHull = localStorage.getItem('pirate_hull');
-      const savedHold = localStorage.getItem('pirate_hold');
-      const savedMorale = localStorage.getItem('pirate_morale');
       
       if (savedGold) setGold(parseInt(savedGold, 10));
-      if (savedHull) setHull(parseInt(savedHull, 10));
-      if (savedHold) setHold(parseInt(savedHold, 10));
-      if (savedMorale) setMorale(parseInt(savedMorale, 10));
 
-      const savedChat = localStorage.getItem('pirate_koko_chat');
-      if (savedChat) {
-        setChat(JSON.parse(savedChat));
-      }
+      const savedMode = localStorage.getItem('pirate_koko_mode') as 'personal' | 'shared';
+      if (savedMode) setKokoMode(savedMode);
+      
+      const savedPerspective = localStorage.getItem('pirate_koko_perspective') as 'cindy' | 'grinch';
+      if (savedPerspective) setSharedChatPerspective(savedPerspective);
+      
+      const savedModel = localStorage.getItem('pirate_ai_model') as AIModelType;
+      const validModels: AIModelType[] = [
+        'qwen/qwen3.5-122b-a10b',
+        'stepfun-ai/step-3.5-flash',
+        'abacusai/dracarys-llama-3.1-70b-instruct'
+      ];
+      if (savedModel && validModels.includes(savedModel)) setAiModel(savedModel);
     };
 
     loadStats();
@@ -74,10 +100,123 @@ export default function PirateDashboard() {
     };
   }, []);
 
-  // Scroll to bottom of chat when messages change
+  const handleAuthComplete = () => {
+    setIsAuthenticated(true);
+  };
+
+  // ТОТАЛЬНАЯ ЗАЩИТА ОТ СКРОЛЛА ВНИЗ!!!
   useEffect(() => {
+    // 1. Отключаем восстановление позиции браузером
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+
+    const resetScroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    };
+
+    // Сбрасываем сразу
+    resetScroll();
+    
+    // 2. ДОБАВЛЯЕМ ВРЕМЕННЫЙ СЛУШАТЕЛЬ: любая попытка скролла возвращает вверх!
+    const forceScrollToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    };
+    window.addEventListener('scroll', forceScrollToTop, { passive: false });
+
+    // 3. И подстрахуемся чуть позже, когда всё точно загрузится
+    const timeout = setTimeout(() => {
+      // Удаляем слушатель через 1 секунду — больше не нужно
+      window.removeEventListener('scroll', forceScrollToTop);
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('scroll', forceScrollToTop);
+      // Возвращаем, чтобы на других страницах работало
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'auto';
+      }
+    };
+  }, [isMounted]);
+
+  // Загружаем историю чата после того, как все состояния (mode/perspective) загружены
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    // Загрузка чата в зависимости от режима и перспективы
+    let chatKey = '';
+    if (kokoMode === 'personal') {
+      chatKey = 'pirate_koko_chat_personal';
+    } else {
+      chatKey = `pirate_koko_chat_shared_${sharedChatPerspective}`;
+    }
+    const savedChat = localStorage.getItem(chatKey);
+    if (savedChat) {
+      setChat(JSON.parse(savedChat));
+    } else {
+      // Reset to default if no history
+      if (kokoMode === 'personal') {
+        setChat([{ role: 'koko', text: 'Привет! Я Коко, тут, чтобы выслушать и помочь разобраться. Что у тебя на сердце?' }]);
+      } else {
+        // В shared mode: по умолчанию от лица Синди, добавляем скрытое приветствие от Гринча
+        setChat([
+          { role: 'grinch', text: 'привет, как дела?', hidden: true },
+          { role: 'koko', text: 'Готов поговорить о вас и ваших отношениях. Как дела?' }
+        ]);
+      }
+    }
+  }, [kokoMode, sharedChatPerspective, isMounted]);
+
+  // Save mode and perspective to localStorage when they change
+  useEffect(() => {
+    if (!isMounted) return;
+    localStorage.setItem('pirate_koko_mode', kokoMode);
+    localStorage.setItem('pirate_koko_perspective', sharedChatPerspective);
+  }, [kokoMode, sharedChatPerspective, isMounted]);
+
+  // Save AI model preference
+  useEffect(() => {
+    localStorage.setItem('pirate_ai_model', aiModel);
+  }, [aiModel]);
+
+  // Флаг для первой загрузки: чтобы не прокручивать страницу вниз при открытии
+  const isFirstRender = useRef(true);
+  const hasScrolledOnce = useRef(false);
+
+  // Scroll to bottom of chat when messages change (НО НЕ НА ПЕРВОЙ ЗАГРУЗКЕ!!!)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    // И еще подстраховка: если мы еще ни разу не скроллили чат сами — не трогать!
+    if (!hasScrolledOnce.current) {
+      return;
+    }
+
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat, isTyping]);
+
+  // Prevent flash by showing a neutral state while checking auth or mounting
+  if (isAuthenticated === null || !isMounted) {
+    return (
+      <div className="min-h-screen bg-[#f4ebd0] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Anchor size={40} className="animate-spin text-amber-700/20" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <PirateAuth onComplete={handleAuthComplete} />;
+  }
+
+  const spaceName = spaceConfig?.name || 'Talia';
+  const p1 = spaceConfig?.partner1_name || 'Гринч';
+  const p2 = spaceConfig?.partner2_name || 'Синди Лу';
 
   // Sync back to localstorage when state changes
   const saveGold = (val: number) => {
@@ -85,46 +224,15 @@ export default function PirateDashboard() {
     localStorage.setItem('pirate_gold', val.toString());
   };
 
-  const saveHull = (val: number) => {
-    setHull(val);
-    localStorage.setItem('pirate_hull', val.toString());
-  };
-
-  const saveHold = (val: number) => {
-    setHold(val);
-    localStorage.setItem('pirate_hold', val.toString());
-  };
-
-  const saveMorale = (val: number) => {
-    setMorale(val);
-    localStorage.setItem('pirate_morale', val.toString());
-  };
-
   const saveChat = (newChat: typeof chat) => {
     setChat(newChat);
-    localStorage.setItem('pirate_koko_chat', JSON.stringify(newChat));
-  };
-
-  // Ship interaction actions
-  const handleRepair = () => {
-    if (hull >= 100) return showNotif('🛠️ Корпус уже в идеальном состоянии!');
-    const newHull = Math.min(100, hull + 10);
-    saveHull(newHull);
-    showNotif('⚒️ Корпус подлатан! +10% прочности');
-  };
-
-  const handleLoad = () => {
-    if (hold >= 100) return showNotif('📦 Трюмы забиты до отказа!');
-    const newHold = Math.min(100, hold + 10);
-    saveHold(newHold);
-    showNotif('📦 Трюмы загружены! +10% припасов');
-  };
-
-  const handleRum = () => {
-    if (morale >= 100) return showNotif('🍺 Команда поет песни, ром льется рекой!');
-    const newMorale = Math.min(100, morale + 15);
-    saveMorale(newMorale);
-    showNotif('🍺 Бочки вскрыты! Боевой дух команды +15%');
+    let chatKey = '';
+    if (kokoMode === 'personal') {
+      chatKey = 'pirate_koko_chat_personal';
+    } else {
+      chatKey = `pirate_koko_chat_shared_${sharedChatPerspective}`;
+    }
+    localStorage.setItem(chatKey, JSON.stringify(newChat));
   };
 
   // Coco Chat actions
@@ -135,16 +243,31 @@ export default function PirateDashboard() {
     const userMsg = textToSend;
     if (!customMsg) setMessage('');
 
-    const updatedChatWithUser = [...chat, { role: 'user' as const, text: userMsg }];
+    // Определяем роль: если shared mode, то role = 'cindy' или 'grinch' в зависимости от перспективы
+    const userRole = kokoMode === 'shared' ? sharedChatPerspective : 'user';
+
+    const updatedChatWithUser = [...chat, { role: userRole as any, text: userMsg }];
     saveChat(updatedChatWithUser);
     setIsTyping(true);
 
     try {
-      const response = await chatWithKoko(userMsg);
+      // Получаем "тайное знание" из localStorage для режима "наша бухта"
+      let secretKnowledge = localStorage.getItem('pirate_shared_secret') || '';
+      
+      // Обновляем секрет, если текущее сообщение тоже добавляем в общую память, чтобы было что-то обсуждать было
+      if (kokoMode === 'shared' && textToSend.length > 5) {
+        const existingSecret = secretKnowledge ? secretKnowledge + '\n' + (sharedChatPerspective + ' сказал(а): ' + textToSend) : textToSend;
+        localStorage.setItem('pirate_shared_secret', existingSecret);
+        secretKnowledge = existingSecret;
+      }
+
+      // Передаем текущего юзера: если shared mode, то user = 'Cindy' или 'Grinch'
+      const effectiveUser = kokoMode === 'shared' ? (sharedChatPerspective === 'cindy' ? 'Cindy' : 'Grinch') : (currentUser || undefined);
+      const response = await chatWithKoko(userMsg, effectiveUser, kokoMode, aiModel, updatedChatWithUser, secretKnowledge);
       const updatedChatWithKoko = [...updatedChatWithUser, { role: 'koko' as const, text: response }];
       saveChat(updatedChatWithKoko);
     } catch (e) {
-      const errorMsg = 'Каррр! Похоже, в океане бушует сильный шторм и мысли путаются. Давай попробуем еще раз через минуту! 🦜';
+      const errorMsg = 'Кажется, связь оборвалась. Попробуй еще раз.';
       saveChat([...updatedChatWithUser, { role: 'koko' as const, text: errorMsg }]);
     } finally {
       setIsTyping(false);
@@ -152,30 +275,51 @@ export default function PirateDashboard() {
   };
 
   const handleClearChat = () => {
-    const defaultChat = [
-      { role: 'koko' as const, text: 'Каррр! Бортовой журнал очищен. Я снова готов выслушать любые твои душевные шторма, капитан! 🦜🌊' }
-    ];
+    const defaultChat: any[] = [];
+    if (kokoMode === 'personal') {
+      defaultChat.push({ role: 'koko' as const, text: 'Бортовой журнал очищен. Говори, я слушаю.' });
+    } else {
+      defaultChat.push({ role: 'grinch', text: 'привет, как дела?', hidden: true });
+      defaultChat.push({ role: 'koko' as const, text: 'Готов поговорить о вас и ваших отношениях. Как дела?' });
+    }
     saveChat(defaultChat);
-    showNotif('🗑️ Диалог с Коко очищен!');
+    
+    // Также сбросим "секрет", чтобы начать с чистого листа
+    localStorage.removeItem('pirate_shared_secret');
+    
+    showNotif('Диалог с Коко очищен');
   };
 
-  // Romantic suggest prompts for Polina
-  const suggestPrompts = [
-    { text: 'Дай пиратский совет дня для нас 💖', icon: '✨' },
-    { text: 'Как справиться со штормом в паре? 🌪️', icon: '⚓' },
-    { text: 'Коко, расскажи притчу о верности 🦜', icon: '📜' },
-    { text: 'Где спрятано наше главное сокровище? 💎', icon: '🔑' }
+  // Suggest prompts
+  const suggestPrompts = kokoMode === 'personal' ? [
+    { text: 'Мне тревожно сегодня...', icon: '' },
+    { text: 'Как мне расслабиться?', icon: '' },
+    { text: 'Дай совет для продуктивности', icon: '' },
+    { text: 'Просто поболтаем?', icon: '' }
+  ] : [
+    { text: 'Дай совет дня для нас', icon: '' },
+    { text: 'Как справиться со штормом в паре?', icon: '' },
+    { text: 'Расскажи о важности доверия', icon: '' },
+    { text: 'В чем наша сила как пары?', icon: '' }
   ];
 
   return (
-    <div className="relative min-h-screen bg-[#000000] text-amber-100 font-serif overflow-x-hidden selection:bg-amber-500/30 pb-32">
-      
-      {/* Ambient background glows */}
-      <div className="absolute top-[-150px] left-[-150px] w-[600px] h-[600px] bg-amber-600/10 rounded-full blur-[140px] pointer-events-none z-0" />
-      <div className="absolute bottom-[50px] right-[-150px] w-[700px] h-[700px] bg-red-600/10 rounded-full blur-[150px] pointer-events-none z-0" />
-      
-      {/* Wood pattern Overlay */}
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-[0.05] pointer-events-none z-0" />
+    <div className="relative min-h-screen text-stone-900 font-serif selection:bg-amber-500/30 flex flex-col bg-[#f4ebd0]">
+      {/* Background Decor - Old Map style */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
+        <div className="absolute -top-20 -left-20 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px]" />
+        <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-[100px]" />
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative z-10 flex-1 flex flex-col"
+      >
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -184,117 +328,112 @@ export default function PirateDashboard() {
             initial={{ opacity: 0, y: -30, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -30, scale: 0.9 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-[500] bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 px-10 py-5 rounded-full font-black text-sm sm:text-base shadow-[0_0_50px_rgba(245,158,11,0.6)] border border-amber-200/30 flex items-center gap-3.5 backdrop-blur-md"
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[500] bg-red-700 text-white px-10 py-5 rounded-full font-black text-sm sm:text-base shadow-[0_15px_40px_rgba(185,28,28,0.3)] border-b-4 border-red-900 flex items-center gap-3.5 backdrop-blur-md"
           >
-            <CheckCircle2 size={20} className="text-slate-950" />
+            <CheckCircle2 size={20} className="text-white" />
             <span className="tracking-widest uppercase font-black">{notification}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-10 space-y-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6 pb-32 w-full">
         
         {/* HEADER BLOCK */}
-        <header className="flex flex-row justify-between items-center gap-6 border-b-2 border-amber-500/20 pb-8">
-           <div className="text-left space-y-2">
-              <div className="flex items-center justify-start gap-2.5 text-amber-500/70 uppercase text-[11px] font-black tracking-[0.4em]">
-                 <Anchor size={14} className="text-amber-500" />
-                 <span>Капитанский Мостик · ТОРТУГА</span>
+        <header className="flex flex-row justify-between items-center gap-6 border-b-4 border-amber-900/10 pb-12 relative">
+           <div className="text-left space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-900/10 bg-white/40 px-4 py-2 shadow-sm backdrop-blur-sm">
+                <Anchor size={14} className="text-amber-700/60" />
+                <span className="text-[10px] font-black uppercase tracking-[0.32em] text-amber-900/45">Ваша тихая пристань</span>
               </div>
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-100 via-amber-400 to-amber-700 drop-shadow-[0_2px_15px_rgba(245,158,11,0.35)]">
-                 Бухта Тортуга
+              <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tight text-amber-950 drop-shadow-sm">
+                 Бухта <span className="text-amber-600">{spaceName}</span>
               </h1>
+              <p className="max-w-2xl text-sm md:text-base italic text-amber-900/70 whitespace-nowrap overflow-hidden text-ellipsis">
+                Место, где шторма затихают, а сердца находят верный курс домой.
+              </p>
            </div>
 
            {/* Beautiful Theme Changer / Admin Panel Switcher */}
-           <div className="shrink-0 z-20">
+           <div className="shrink-0 z-20 flex items-center gap-3">
+             <Link href="/about">
+               <motion.button
+                 whileHover={{ scale: 1.08, rotate: -2, backgroundColor: '#ffffff', borderColor: '#ffffff' }}
+                 whileTap={{ scale: 0.95 }}
+                 className="flex items-center gap-3 px-6 py-4 bg-amber-100 text-amber-900 border-b-4 border-amber-300 rounded-2xl transition-all duration-300 shadow-xl font-black uppercase tracking-[0.2em] text-xs hover:border-white"
+               >
+                 <Trees size={18} />
+                 <span>НОВОЕ</span>
+               </motion.button>
+             </Link>
              <Link href="/admin">
                <motion.button
-                 whileHover={{ scale: 1.05, boxShadow: "0 0 25px rgba(245, 158, 11, 0.45)" }}
+                 whileHover={{ scale: 1.05, rotate: 2 }}
                  whileTap={{ scale: 0.95 }}
-                 className="flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3.5 bg-gradient-to-r from-amber-950/40 to-amber-900/20 hover:from-amber-500 hover:to-amber-600 border border-amber-500/30 hover:border-amber-300 hover:text-slate-950 rounded-2xl transition-all duration-300 shadow-lg cursor-pointer font-sans font-black"
+                 className="flex items-center gap-3 px-10 py-5 bg-amber-500 text-slate-950 border-b-4 border-amber-700 rounded-2xl transition-all duration-300 font-black uppercase tracking-[0.2em] text-xs"
                >
-                 <Settings size={15} className="animate-spin-slow text-amber-500 hover:text-slate-950" />
-                 <span className="text-[10px] uppercase tracking-widest hidden sm:inline text-amber-500 hover:text-slate-950">Сменить тему (Talia)</span>
-                 <span className="text-[9px] uppercase tracking-widest sm:hidden text-amber-500 hover:text-slate-950">Talia</span>
+                 <Settings size={18} className="animate-spin-slow" />
+                 <span>Управление</span>
                </motion.button>
              </Link>
            </div>
         </header>
 
         {/* 3D INTERACTIVE SAFE PIRATE BAY SCENARIO */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
            
-           {/* Left Column: Huge 3D Interactive Haven Diorama + Category Selector under it */}
+           {/* Left Column: Huge 3D Interactive Haven Diorama */}
            <div className="lg:col-span-8 flex flex-col gap-6 w-full">
-              <div className="h-[380px] md:h-[430px] rounded-[3rem] border-4 border-amber-500/30 overflow-hidden relative shadow-[0_0_60px_rgba(245,158,11,0.35)] bg-black">
-                 {isMounted ? (
-                   <BayScene />
-                 ) : (
-                   <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4">
-                     <Anchor size={36} className="animate-spin text-amber-500" />
-                     <span className="text-xs uppercase font-black text-amber-500/60 tracking-widest animate-pulse">Заряжаем пушки, строим бухту...</span>
-                   </div>
-                 )}
-              </div>
-
-              {/* TABS SELECTOR (Centered perfectly under the 3D diorama model) */}
-              <div className="flex items-center justify-center bg-black/95 p-2 rounded-[2rem] border border-amber-500/20 backdrop-blur-sm shadow-2xl relative z-20 w-full max-w-xl mx-auto">
-                 <div className="flex items-center justify-between w-full gap-2">
-                   {[
-                     { id: 'ship', label: 'Борт фрегата', icon: <Anchor size={16} /> },
-                     { id: 'koko', label: 'ИИ-Терапевт Коко', icon: <MessageCircle size={16} /> },
-                   ].map(tab => (
-                     <button
-                       key={tab.id}
-                       onClick={() => setActiveTab(tab.id as any)}
-                       className={cn(
-                         "flex-1 flex items-center justify-center gap-2 px-3 sm:px-6 py-4 rounded-xl font-black uppercase tracking-widest text-xs sm:text-sm transition-all cursor-pointer",
-                         activeTab === tab.id 
-                          ? "bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-[0_0_30px_rgba(245,158,11,0.4)] scale-105" 
-                          : "text-amber-500/60 hover:text-amber-300 hover:bg-amber-950/20"
-                       )}
+              <motion.div 
+                initial={false}
+                animate={{ backgroundColor: isMounted ? '#000000' : '#d9c5a0' }}
+                transition={{ duration: 1 }}
+                className="h-[450px] rounded-[3rem] border-[12px] border-[#3e2723]/10 overflow-hidden relative shadow-[20px_20px_60px_rgba(0,0,0,0.1)]"
+              >
+                 <AnimatePresence mode="wait">
+                   {isMounted ? (
+                     <motion.div
+                       key="bay-scene"
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       transition={{ duration: 1 }}
+                       className="w-full h-full"
                      >
-                       {tab.icon} <span>{tab.label}</span>
-                     </button>
-                   ))}
-                 </div>
-              </div>
+                       <BayScene />
+                     </motion.div>
+                   ) : (
+                     <motion.div
+                       key="bay-loading"
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       exit={{ opacity: 0 }}
+                       className="w-full h-full flex flex-col items-center justify-center bg-[#d9c5a0] gap-4"
+                     >
+                       <Anchor size={36} className="animate-spin text-amber-900/20" />
+                       <span className="text-[10px] uppercase font-black text-amber-900/30 tracking-[0.3em] animate-pulse">Заряжаем пушки...</span>
+                     </motion.div>
+                   )}
+                 </AnimatePresence>
+              </motion.div>
            </div>
 
            {/* Right Column: Immersive safe harbor status sheet */}
-           <div className="lg:col-span-4 rounded-[3rem] p-8 bg-gradient-to-br from-[#0c0c0c] to-[#000000] border-2 border-amber-500/20 relative shadow-2xl overflow-hidden flex flex-col justify-between h-full min-h-[505px]">
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-5 pointer-events-none" />
-              <div className="absolute top-0 left-0 w-full h-[150px] bg-gradient-to-b from-amber-500/5 to-transparent pointer-events-none" />
-
-              <div className="space-y-6 text-left relative z-10">
-                 <div className="border-b border-amber-500/20 pb-4">
-                    <span className="text-[10px] font-black uppercase text-amber-500 tracking-[0.25em] block">Ведомости бухты</span>
-                    <h2 className="text-2xl font-black text-amber-100 uppercase tracking-tight mt-1">Мирная Гавань Тортуга</h2>
+           <div className="lg:col-span-4 rounded-[3rem] p-10 bg-[#f2e2ba] border-[12px] border-[#3e2723]/10 relative shadow-[20px_20px_60px_rgba(0,0,0,0.1)] overflow-hidden flex flex-col justify-between h-[450px]">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+              
+              <div className="space-y-8 text-left relative z-10">
+                 <div className="border-b-2 border-amber-900/10 pb-4">
+                    <span className="text-[10px] font-black uppercase text-amber-900/40 tracking-[0.25em] block">Ведомости бухты</span>
+                    <h2 className="text-3xl font-black text-amber-950 uppercase tracking-tight mt-1">Мирная Гавань</h2>
                  </div>
 
-                 <p className="text-sm text-amber-100/90 leading-relaxed font-sans font-bold">
-                    Капитан! Пришвартовывайся к тихой пристани. Это самое **безопасное и теплое место** во всем архипелаге. Здесь шторма бессильны, пушки молчат, а команда может спокойно отдохнуть в таверне, пока ты общаешься с ИИ-попугаем Коко и занимаешься корабельными приборами.
+                 <p className="text-base text-amber-900/70 leading-relaxed italic font-serif">
+                    Капитан! Пришвартовывайся к тихой пристани. Это самое безопасное и теплое место во всем архипелаге. Здесь шторма бессильны, а пушки молчат.
                  </p>
-
-                 <div className="p-5 bg-black border border-white/5 rounded-2xl space-y-4 shadow-inner">
-                    <h4 className="text-[10px] font-black uppercase text-amber-400 tracking-widest">Сводка по форпосту:</h4>
-                    <div className="grid grid-cols-2 gap-4 text-xs font-sans font-black">
-                       <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-amber-100 font-black">Бухта безопасна</span>
-                       </div>
-                       <div className="flex items-center gap-2">
-                          <span>🔥</span>
-                          <span className="text-amber-100 font-black">Костер разожжен</span>
-                       </div>
-                    </div>
-                 </div>
               </div>
 
-              <div className="pt-6 border-t border-amber-500/10 text-center relative z-10">
-                 <p className="text-[10px] text-amber-500/50 uppercase tracking-[0.2em] font-black">
-                    Коко вещает: «Любовь греет круче рома!»
+              <div className="pt-6 border-t-2 border-amber-900/10 text-center relative z-10">
+                 <p className="text-[11px] text-amber-900/30 uppercase tracking-[0.3em] font-black italic">
+                    «Любовь греет круче рома!»
                  </p>
               </div>
            </div>
@@ -302,276 +441,222 @@ export default function PirateDashboard() {
         </section>
 
         {/* DYNAMIC CONTENT AREA */}
-        <div className="relative min-h-[480px] z-10">
-          <AnimatePresence mode="wait">
+        <div className="relative min-h-[480px] z-10 mb-20">
+          <AnimatePresence mode="wait" initial={false}>
              
-             {/* TAB 1: SHIP (БОРТ) — Unified Captain's Steering Console */}
-             {activeTab === 'ship' && (
-                <motion.div
-                  key="ship"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-8"
-                >
-                   <div className="bg-[#050505] rounded-[3.5rem] border-2 border-amber-500/20 p-8 shadow-2xl relative overflow-hidden flex flex-col lg:flex-row gap-8 items-center justify-between min-h-[380px]">
-                      
-                      {/* Rotating ship wheel background vector */}
-                      <div className="absolute -left-16 -bottom-16 opacity-[0.04] text-amber-500 pointer-events-none animate-spin-slow">
-                         <svg width="350" height="350" viewBox="0 0 100 100" fill="currentColor">
-                           <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="2" fill="none"/>
-                           <circle cx="50" cy="50" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                           {[0, 45, 90, 135, 180, 225, 270, 315].map(deg => (
-                             <line key={deg} x1="50" y1="50" x2={50 + 48 * Math.cos(deg * Math.PI / 180)} y2={50 + 48 * Math.sin(deg * Math.PI / 180)} stroke="currentColor" strokeWidth="2"/>
-                           ))}
-                         </svg>
-                      </div>
-
-                      <div className="text-left space-y-4 max-w-sm z-10">
-                         <span className="text-[10px] font-black uppercase tracking-[0.25em] text-amber-500">Система Навигации</span>
-                         <h3 className="text-3xl font-black text-amber-100 uppercase tracking-tight leading-none">Приборная Панель</h3>
-                         <p className="text-sm text-amber-100/70 font-bold leading-relaxed font-sans">
-                            Эти приборы показывают текущее физическое и душевное состояние вашего корабля. Держите прочность высокой, а трюмы полными, чтобы экипаж оставался лояльным и готовым к плаваниям!
-                         </p>
-                         <div className="flex gap-2">
-                           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse mt-0.5" />
-                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Системы функционируют нормально</span>
-                         </div>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row gap-8 items-center justify-center w-full lg:w-auto z-10">
-                         
-                         {/* Dial 1: Hull */}
-                         <div className="flex flex-col items-center gap-4">
-                            <div className="w-36 h-36 rounded-full border-4 border-amber-500/20 bg-black flex flex-col items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.9)] group hover:border-orange-500/40 transition-colors duration-500">
-                               <div className="absolute inset-0 rounded-full bg-orange-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                               
-                               <Shield size={24} className="text-orange-400 group-hover:scale-110 transition-transform duration-300" />
-                               <span className="text-3xl font-black text-amber-100 mt-1">{hull}%</span>
-                               <span className="text-[10px] font-black uppercase tracking-widest text-orange-400/80 mt-0.5">Корпус</span>
-                               
-                               <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
-                                 <circle cx="50" cy="50" r="44" className="stroke-orange-500/10 fill-none" strokeWidth="4" />
-                                 <circle cx="50" cy="50" r="44" className="stroke-orange-500 fill-none transition-all duration-700" strokeWidth="4" strokeDasharray="276.4" strokeDashoffset={276.4 - (276.4 * hull) / 100} strokeLinecap="round" />
-                               </svg>
-                            </div>
-                            
-                            <button 
-                              onClick={handleRepair}
-                              className="px-5 py-3 bg-gradient-to-r from-[#111] to-[#000] hover:from-orange-500 hover:to-orange-600 hover:text-slate-950 rounded-xl font-black uppercase tracking-widest text-xs border border-amber-500/30 hover:border-orange-400 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-lg"
-                            >
-                               <Hammer size={14} /> Чинить (+10%)
-                            </button>
-                         </div>
-
-                         {/* Dial 2: Hold Supplies */}
-                         <div className="flex flex-col items-center gap-4">
-                            <div className="w-36 h-36 rounded-full border-4 border-amber-500/20 bg-black flex flex-col items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.9)] group hover:border-sky-500/40 transition-colors duration-500">
-                               <div className="absolute inset-0 rounded-full bg-sky-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                               
-                               <Package size={24} className="text-sky-400 group-hover:scale-110 transition-transform duration-300" />
-                               <span className="text-3xl font-black text-amber-100 mt-1">{hold}%</span>
-                               <span className="text-[10px] font-black uppercase tracking-widest text-sky-400/80 mt-0.5">Трюмы</span>
-                               
-                               <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
-                                 <circle cx="50" cy="50" r="44" className="stroke-sky-500/10 fill-none" strokeWidth="4" />
-                                 <circle cx="50" cy="50" r="44" className="stroke-sky-400 fill-none transition-all duration-700" strokeWidth="4" strokeDasharray="276.4" strokeDashoffset={276.4 - (276.4 * hold) / 100} strokeLinecap="round" />
-                               </svg>
-                            </div>
-                            
-                            <button 
-                              onClick={handleLoad}
-                              className="px-5 py-3 bg-gradient-to-r from-[#111] to-[#000] hover:from-sky-500 hover:to-sky-600 hover:text-slate-950 rounded-xl font-black uppercase tracking-widest text-xs border border-amber-500/30 hover:border-sky-400 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-lg"
-                            >
-                               <Package size={14} /> Грузить (+10%)
-                            </button>
-                         </div>
-
-                         {/* Dial 3: Morale */}
-                         <div className="flex flex-col items-center gap-4">
-                            <div className="w-36 h-36 rounded-full border-4 border-amber-500/20 bg-black flex flex-col items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.9)] group hover:border-red-500/40 transition-colors duration-500">
-                               <div className="absolute inset-0 rounded-full bg-red-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                               
-                               <Beer size={24} className="text-red-400 group-hover:scale-110 transition-transform duration-300" />
-                               <span className="text-3xl font-black text-amber-100 mt-1">{morale}%</span>
-                               <span className="text-[10px] font-black uppercase tracking-widest text-red-400/80 mt-0.5">Дух</span>
-                               
-                               <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none">
-                                 <circle cx="50" cy="50" r="44" className="stroke-red-500/10 fill-none" strokeWidth="4" />
-                                 <circle cx="50" cy="50" r="44" className="stroke-red-500 fill-none transition-all duration-700" strokeWidth="4" strokeDasharray="276.4" strokeDashoffset={276.4 - (276.4 * morale) / 100} strokeLinecap="round" />
-                               </svg>
-                            </div>
-                            
-                            <button 
-                              onClick={handleRum}
-                              className="px-5 py-3 bg-gradient-to-r from-[#111] to-[#000] hover:from-red-500 hover:to-red-600 hover:text-slate-950 rounded-xl font-black uppercase tracking-widest text-xs border border-amber-500/30 hover:border-red-400 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-lg"
-                            >
-                               <Beer size={14} /> Налить Рома (+15%)
-                            </button>
-                         </div>
-
-                      </div>
-
-                   </div>
-
-                   {/* Gossip & Weather */}
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="relative p-6 rounded-[2.5rem] bg-black border-2 border-red-500/25 text-left shadow-lg overflow-hidden">
-                         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-5 pointer-events-none" />
-                         <div className="flex justify-between items-center border-b border-red-500/15 pb-3 mb-4">
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400 flex items-center gap-1.5">
-                               <Wind size={14} /> Штормовое предупреждение
-                            </p>
-                            <span className="text-[9px] font-black text-red-400 bg-red-950/20 px-2.5 py-0.5 rounded-full border border-red-500/25">Опасно</span>
-                         </div>
-                         <div className="flex items-start gap-4">
-                            <div className="p-3.5 bg-red-500/10 rounded-2xl text-red-400 border border-red-500/20 shrink-0">
-                               <CloudLightning size={24} className="animate-pulse" />
-                            </div>
-                            <div className="space-y-1">
-                               <h4 className="text-base font-black text-amber-100">Буря в Карибском море</h4>
-                               <p className="text-xs text-amber-100 font-bold leading-relaxed">Волны высотой до 8 метров. Кораблям не рекомендуется покидать бухту Тортуга до полного отлива во избежание крушения.</p>
-                            </div>
-                         </div>
-                      </div>
-
-                      <div className="relative p-6 rounded-[2.5rem] bg-black border-2 border-amber-500/20 text-left shadow-lg overflow-hidden">
-                         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-5 pointer-events-none" />
-                         <div className="flex justify-between items-center border-b border-amber-500/15 pb-3 mb-4">
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/60 flex items-center gap-1.5">
-                               <Scroll size={14} /> Слухи из таверны «Кракен»
-                            </p>
-                            <span className="text-[9px] font-black text-amber-400 bg-amber-950/20 px-2.5 py-0.5 rounded-full border border-amber-500/20">Слухи</span>
-                         </div>
-                         <div className="flex items-start gap-4">
-                            <div className="p-3.5 bg-amber-500/10 rounded-2xl text-amber-400 border border-amber-500/20 shrink-0">
-                               <Coins size={24} />
-                            </div>
-                            <div className="space-y-1">
-                               <h4 className="text-base font-black text-amber-100">Испанский Золотой Галеон</h4>
-                               <p className="text-xs text-amber-100 font-bold leading-relaxed">Матросы шепчутся, что груженый до краев галеон бросил якорь неподалеку. Это отличный шанс наполнить казну золотом!</p>
-                            </div>
-                         </div>
-                      </div>
-                   </div>
-
-                </motion.div>
-             )}
-
-             {/* TAB 2: COCO ONLINE AI THERAPIST (ИИ-ТЕРАПЕВТ КОКО) — Immersive interactive chat station */}
-             {activeTab === 'koko' && (
-                <motion.div
-                  key="koko"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.3 }}
-                  className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
-                >
+             {/* COCO ONLINE AI THERAPIST */}
+             <motion.div
+               key="koko"
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               transition={{ duration: 0.3 }}
+               className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch"
+             >
                    {/* Left Side Column: Coco Psych Profile Card */}
-                   <div className="lg:col-span-4 rounded-[3rem] p-8 bg-gradient-to-br from-[#080503] to-[#120803] border-4 border-amber-500/30 flex flex-col justify-between items-center text-center overflow-hidden relative shadow-2xl min-h-[480px]">
+                   <div className="lg:col-span-4 rounded-[3rem] p-10 bg-[#f2e2ba] border-[12px] border-[#3e2723]/10 flex flex-col justify-between items-center text-center overflow-hidden relative shadow-[20px_20px_60px_rgba(0,0,0,0.1)] min-h-[550px]">
                       
                       {/* Paper texture overlay */}
-                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-[0.03] pointer-events-none" />
-                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-
-                      <div className="space-y-6 w-full relative z-10">
+                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+                      
+                      <div className="space-y-8 w-full relative z-10">
                          {/* Live Badge */}
-                         <div className="flex items-center justify-center gap-2 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1 rounded-full w-fit mx-auto shadow-sm">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400">КОКО В СЕТИ</span>
+                         <div className="flex items-center justify-center gap-2 bg-emerald-500/10 border-2 border-emerald-500/20 px-4 py-2 rounded-full w-fit mx-auto">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">КОКО В СЕТИ</span>
                          </div>
 
                          {/* Coco Avatar Container */}
-                         <div className="relative w-36 h-36 mx-auto flex items-center justify-center">
-                            <div className="absolute inset-0 rounded-[2.5rem] bg-amber-500/10 border-2 border-amber-500/20 blur-md animate-pulse" />
-                            <div className="w-28 h-28 rounded-[2.2rem] bg-[#0c0704] border-2 border-amber-500/40 shadow-inner flex items-center justify-center text-7xl select-none animate-bounce-slow transform hover:rotate-6 transition-all duration-300">
+                         <div className="relative w-44 h-44 mx-auto">
+                            <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-3xl animate-pulse" />
+                            <div className="absolute inset-0 rounded-[3rem] bg-white/60 border-4 border-amber-900/10 shadow-2xl flex items-center justify-center text-8xl select-none transform hover:rotate-6 transition-all duration-500">
                                🦜
                             </div>
-                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 p-2 rounded-xl border border-amber-300 shadow-md">
-                               <Sparkles size={16} className="animate-spin-slow" />
+                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 p-3 rounded-2xl border-4 border-amber-300 shadow-xl">
+                               <Sparkles size={20} className="animate-spin-slow" />
                             </div>
                          </div>
 
                          {/* Description texts */}
-                         <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-amber-100 uppercase tracking-tight leading-none">Психолог Коко</h3>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/60">Личный ии-терапевт Тортуги</p>
+                         <div className="space-y-3">
+                            <h3 className="text-3xl font-black text-amber-950 uppercase tracking-tight leading-none">Психолог Коко</h3>
+                            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-amber-900/40">ИИ-терапевт Тортуги</p>
                          </div>
 
-                         <p className="text-xs text-amber-200/70 font-sans font-bold leading-relaxed px-2">
-                            «Йо-хо-хо! Не давай сердечным штормам порвать паруса твоей любви. Выговорись старому попугаю, и я укажу надежный курс сквозь любые туманы!»
+                         <p className="text-sm text-amber-900/70 font-serif italic leading-relaxed px-4">
+                            «Ты можешь мне рассказать все, что угодно. Я помогу разобраться в чувствах и найти путь вперед.»
                          </p>
                       </div>
 
                       {/* Interactive Clear Chat Button */}
                       <button 
-                        onClick={handleClearChat}
-                        className="w-full mt-8 py-3.5 bg-gradient-to-r from-red-950/20 to-red-900/10 hover:from-red-600 hover:to-red-700 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] border border-red-500/20 hover:border-red-400 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg relative z-10"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleClearChat();
+                        }}
+                        className="w-full mt-10 py-5 bg-red-700/10 hover:bg-red-700 text-red-700 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[11px] border-2 border-red-700/20 hover:border-red-700 transition-all flex items-center justify-center gap-3 cursor-pointer shadow-lg relative z-20 pointer-events-auto"
                       >
-                         <Trash2 size={12} /> Очистить Бортжурнал
+                         <Trash2 size={16} /> Очистить БОРТЖУРНАЛ
                       </button>
                    </div>
 
-                   {/* Right Side Column: Gorgeous Scrollable Consult Terminal */}
-                   <div className="lg:col-span-8 rounded-[3rem] p-6 bg-[#040404] border-2 border-amber-500/15 flex flex-col justify-between shadow-2xl relative overflow-hidden min-h-[480px]">
+                   {/* Right Side Column: Immersive Consult Terminal */}
+                   <div className="lg:col-span-8 rounded-[3rem] p-10 bg-[#f2e2ba] border-[12px] border-[#3e2723]/10 flex flex-col justify-between shadow-[20px_20px_60px_rgba(0,0,0,0.1)] relative overflow-hidden min-h-[550px] z-10">
+                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
                       
                       {/* Header bar inside consult panel */}
-                      <div className="flex items-center justify-between border-b border-amber-500/10 pb-4 mb-4 shrink-0">
-                         <div className="flex items-center gap-2.5">
-                            <MessageCircle size={16} className="text-amber-500 animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-100/50">Сеанс онлайн-терапии в реальном времени</span>
+                      <div className="flex flex-col gap-4 border-b-2 border-amber-900/10 pb-6 mb-6 shrink-0 relative z-10">
+                         <div className="flex items-center justify-between">
+                             <div className="flex gap-2 p-1 bg-amber-900/5 rounded-2xl border border-amber-900/10">
+                                <button 
+                                  onClick={() => setKokoMode('personal')}
+                                  className={cn(
+                                    "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                    kokoMode === 'personal' ? "bg-amber-800 text-white shadow-lg" : "text-amber-900/40 hover:text-amber-900/60"
+                                  )}
+                                >
+                                   Личный разговор
+                                </button>
+                                <button 
+                                  onClick={() => setKokoMode('shared')}
+                                  className={cn(
+                                    "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                    kokoMode === 'shared' ? "bg-amber-800 text-white shadow-lg" : "text-amber-900/40 hover:text-amber-900/60"
+                                  )}
+                                >
+                                   Наша бухта
+                                </button>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                <div className={cn("w-2.5 h-2.5 rounded-full animate-pulse", kokoMode === 'personal' ? "bg-rose-500" : "bg-emerald-500")} />
+                                <span className="text-[10px] font-black text-amber-950/40 uppercase tracking-widest">
+                                   {kokoMode === 'personal' ? 'Приватный канал' : 'Общий канал'}
+                                </span>
+                             </div>
                          </div>
-                         <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[9px] font-black text-emerald-400 tracking-wider">Шифрование надежно</span>
-                         </div>
+                         {/* Переключатель Чат Синди / Чат Гринча (только в shared mode) */}
+                         {kokoMode === 'shared' && (
+                           <div className="flex gap-2 p-1 bg-rose-900/5 rounded-2xl border border-rose-900/10">
+                              <button 
+                                onClick={() => setSharedChatPerspective('cindy')}
+                                className={cn(
+                                  "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                  sharedChatPerspective === 'cindy' ? "bg-rose-700 text-white shadow-lg" : "text-rose-900/40 hover:text-rose-900/60"
+                                )}
+                              >
+                                 💬 Чат Синди
+                              </button>
+                              <button 
+                                onClick={() => setSharedChatPerspective('grinch')}
+                                className={cn(
+                                  "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                                  sharedChatPerspective === 'grinch' ? "bg-blue-700 text-white shadow-lg" : "text-blue-900/40 hover:text-blue-900/60"
+                                )}
+                              >
+                                 🎩 Чат Гринча
+                              </button>
+                           </div>
+                         )}
+                         {/* AI Model Switcher - только для Гринча, показываем переключатель, но скрываем название модели */}
+                         {(isGrinch || isCindy) && (
+                          <div className="flex flex-col gap-3">
+                             {isGrinch && (
+                               <div className="flex flex-wrap gap-2 p-1 bg-purple-900/5 rounded-2xl border border-purple-900/10">
+                                  <button 
+                                    onClick={() => setAiModel('qwen/qwen3.5-122b-a10b')}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                                      aiModel === 'qwen/qwen3.5-122b-a10b' ? "bg-purple-700 text-white shadow-lg" : "text-purple-900/40 hover:text-purple-900/60"
+                                    )}
+                                  >
+                                     Qwen 3.5 122B
+                                  </button>
+                                  <button 
+                                    onClick={() => setAiModel('stepfun-ai/step-3.5-flash')}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                                      aiModel === 'stepfun-ai/step-3.5-flash' ? "bg-purple-600 text-white shadow-lg" : "text-purple-900/40 hover:text-purple-900/60"
+                                    )}
+                                  >
+                                     Step 3.5 Flash
+                                  </button>
+                                  <button 
+                                    onClick={() => setAiModel('abacusai/dracarys-llama-3.1-70b-instruct')}
+                                    className={cn(
+                                      "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                                      aiModel === 'abacusai/dracarys-llama-3.1-70b-instruct' ? "bg-red-700 text-white shadow-lg" : "text-red-900/40 hover:text-red-900/60"
+                                    )}
+                                  >
+                                     Dracarys 70B
+                                  </button>
+                               </div>
+                             )}
+                             {/* Показываем название модели только Синди */}
+                             {isCindy && (
+                               <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black text-amber-950/40 uppercase tracking-widest">
+                                     Текущая модель: {aiModel}
+                                  </span>
+                               </div>
+                             )}
+                          </div>
+                         )}
                       </div>
 
                       {/* Message History Workspace */}
-                      <div className="flex-1 overflow-y-auto space-y-4 px-2 py-4 max-h-[340px] scrollbar-thin scrollbar-thumb-amber-500/10">
-                         {chat.map((msg, idx) => (
+                      <div className="flex-1 overflow-y-auto space-y-6 px-4 py-4 max-h-[400px] scrollbar-thin scrollbar-thumb-amber-900/10 relative z-10">
+                         {chat.map((msg, idx) => {
+                            // Скрываем сообщения с hidden: true и сообщения противоположного персонажа
+                            if ((msg as any).hidden) return null;
+                            if (kokoMode === 'shared') {
+                                if (sharedChatPerspective === 'cindy' && msg.role === 'grinch') return null;
+                                if (sharedChatPerspective === 'grinch' && msg.role === 'cindy') return null;
+                            }
+
+                            const isCurrentUser = msg.role === 'user' || msg.role === sharedChatPerspective;
+                            
+                            return (
                             <motion.div
                               key={idx}
-                              initial={{ opacity: 0, y: 15 }}
-                              animate={{ opacity: 1, y: 0 }}
+                              initial={{ opacity: 0, x: isCurrentUser ? 20 : -20 }}
+                              animate={{ opacity: 1, x: 0 }}
                               className={cn(
-                                 "flex gap-3 max-w-[85%] items-start text-left",
-                                 msg.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
+                                 "flex gap-4 max-w-[90%] items-start text-left",
+                                 isCurrentUser ? "ml-auto flex-row-reverse" : "mr-auto"
                               )}
                             >
                                {/* Avatar */}
                                <div className={cn(
-                                  "w-8 h-8 rounded-lg border flex items-center justify-center text-sm shrink-0 shadow-md",
-                                  msg.role === 'user' 
-                                    ? "bg-amber-500 border-amber-400 text-slate-900" 
-                                    : "bg-amber-950/40 border-amber-500/20 text-amber-100"
+                                  "w-10 h-10 rounded-xl border-4 flex items-center justify-center text-lg shrink-0 shadow-lg",
+                                  isCurrentUser 
+                                    ? (msg.role === 'grinch' ? "bg-blue-700 border-blue-900 text-white" : "bg-red-700 border-red-900 text-white") 
+                                    : (msg.role === 'koko' ? "bg-[#3e2723] border-amber-600/30 text-amber-100" : "bg-amber-200 border-amber-400 text-amber-900")
                                )}>
-                                  {msg.role === 'user' ? <User size={14} /> : '🦜'}
+                                  {msg.role === 'koko' ? '🦜' : (msg.role === 'grinch' ? '🎩' : (msg.role === 'cindy' ? '💬' : <User size={18} />))}
                                </div>
 
                                {/* Bubble */}
                                <div className={cn(
-                                  "p-4 rounded-2xl font-bold leading-relaxed text-sm font-sans relative shadow-inner",
-                                  msg.role === 'user' 
-                                    ? "bg-amber-500 text-slate-950 rounded-tr-none" 
-                                    : "bg-[#0b0b0b] text-amber-100 rounded-tl-none border border-amber-500/10"
+                                  "p-6 rounded-2xl font-bold leading-relaxed text-base font-serif relative shadow-md",
+                                  isCurrentUser 
+                                    ? (msg.role === 'grinch' ? "bg-blue-700 text-white rounded-tr-none" : "bg-red-700 text-white rounded-tr-none") 
+                                    : (msg.role === 'koko' ? "bg-white/60 text-stone-900 rounded-tl-none border-2 border-amber-900/5" : "bg-amber-100 text-amber-900 rounded-tl-none border-2 border-amber-300")
                                )}>
                                   {msg.text}
                                </div>
                             </motion.div>
-                         ))}
+                            );
+                         })}
 
                          {isTyping && (
-                            <div className="flex gap-3 items-center mr-auto text-left">
-                               <div className="w-8 h-8 rounded-lg bg-amber-950/40 border border-amber-500/20 flex items-center justify-center text-sm shrink-0">
+                            <div className="flex gap-4 items-center mr-auto text-left">
+                               <div className="w-10 h-10 rounded-xl bg-[#3e2723] border-4 border-amber-600/30 flex items-center justify-center text-lg shrink-0">
                                   🦜
                                </div>
-                               <div className="bg-[#0b0b0b] border border-amber-500/10 p-4 rounded-2xl rounded-tl-none w-16 flex gap-1 justify-center shadow-inner">
-                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" />
-                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.2s]" />
-                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce [animation-delay:0.4s]" />
+                               <div className="bg-white/40 border-2 border-amber-900/5 p-5 rounded-2xl rounded-tl-none w-20 flex gap-1.5 justify-center shadow-inner">
+                                  <span className="w-2 h-2 bg-amber-900/20 rounded-full animate-bounce" />
+                                  <span className="w-2 h-2 bg-amber-900/20 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                  <span className="w-2 h-2 bg-amber-900/20 rounded-full animate-bounce [animation-delay:0.4s]" />
                                </div>
                             </div>
                          )}
@@ -579,51 +664,64 @@ export default function PirateDashboard() {
                       </div>
 
                       {/* Footer: Quick suggesting prompts & Input console */}
-                      <div className="mt-4 pt-4 border-t border-amber-500/10 space-y-4 shrink-0">
+                      <div className="mt-8 pt-8 border-t-2 border-amber-900/10 space-y-6 shrink-0 relative z-20">
                          
                          {/* Prompt suggestions grid */}
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-30">
                             {suggestPrompts.map((prompt, i) => (
                                <button
                                  key={i}
-                                 onClick={() => handleSend(prompt.text)}
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.preventDefault();
+                                   handleSend(prompt.text);
+                                 }}
                                  disabled={isTyping}
-                                 className="px-3 py-2 bg-[#080808] hover:bg-amber-500/10 border border-amber-500/10 hover:border-amber-500/30 rounded-xl text-[10px] font-sans font-black text-amber-400 text-left transition-all cursor-pointer truncate flex items-center gap-1.5 active:scale-95"
+                                 className="px-4 py-3 bg-amber-900/5 hover:bg-amber-800 hover:text-white border-2 border-amber-900/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-amber-900/60 text-left transition-all cursor-pointer truncate flex items-center gap-2 active:scale-95 pointer-events-auto"
                                >
-                                  <span>{prompt.icon}</span> <span className="truncate">{prompt.text}</span>
+                                  <Sparkles size={12} /> <span className="truncate">{prompt.text}</span>
                                </button>
                             ))}
                          </div>
 
                          {/* Console Input Bar */}
-                         <div className="relative">
+                         <form 
+                           onSubmit={(e) => {
+                             e.preventDefault();
+                             handleSend();
+                           }}
+                           className="relative z-30"
+                         >
                             <input
                               type="text"
                               value={message}
                               onChange={(e) => setMessage(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                              placeholder="Задай Коко вопрос об отношениях..."
+                              placeholder="Задай Коко вопрос..."
                               disabled={isTyping}
-                              className="w-full bg-[#070707] border border-amber-500/20 focus:border-amber-500/40 rounded-2xl px-5 py-4 text-amber-100 placeholder:text-amber-500/30 focus:outline-none transition-all pr-14 text-sm font-sans font-medium"
+                              className="w-full bg-white/60 border-4 border-amber-900/10 focus:border-amber-800 rounded-2xl px-8 py-5 text-stone-900 placeholder:text-amber-900/20 focus:outline-none transition-all pr-20 text-lg font-serif font-bold shadow-inner pointer-events-auto"
                             />
                             <button
-                              onClick={() => handleSend()}
+                              type="submit"
                               disabled={isTyping}
-                              className="absolute right-2 top-2 bottom-2 w-10 bg-amber-500 text-slate-950 rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg"
+                              className="absolute right-3 top-3 bottom-3 px-5 bg-amber-600 text-white rounded-xl flex items-center justify-center hover:bg-amber-700 active:scale-95 transition-all cursor-pointer shadow-lg border-b-4 border-amber-800 pointer-events-auto"
                             >
-                               <Send size={16} />
+                               <Send size={20} />
                             </button>
-                         </div>
+                         </form>
                       </div>
 
                    </div>
                 </motion.div>
-             )}
 
           </AnimatePresence>
         </div>
 
       </div>
+      <style jsx global>{`
+        @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin-slow { animation: spin-slow 15s linear infinite; }
+      `}</style>
+      </motion.div>
     </div>
   );
 }
