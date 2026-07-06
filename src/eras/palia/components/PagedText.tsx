@@ -55,10 +55,13 @@ export function PagedText({ content, isCapsule = false, renderFooter }: PagedTex
     if (textRef.current) resizeObserver.observe(textRef.current);
 
     // Initial calculation
-    timerId = setTimeout(updatePages, 50);
+    const initialTimer = setTimeout(updatePages, 100);
+    const secondaryTimer = setTimeout(updatePages, 500); // Дополнительный пересчет для надежности
     
     return () => {
       clearTimeout(timerId);
+      clearTimeout(initialTimer);
+      clearTimeout(secondaryTimer);
       resizeObserver.disconnect();
     };
   }, [content, currentPage]);
