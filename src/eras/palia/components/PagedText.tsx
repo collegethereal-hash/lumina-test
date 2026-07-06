@@ -23,10 +23,14 @@ export function PagedText({ content, isCapsule = false, renderFooter }: PagedTex
   const GAP = 80; // Увеличиваем отступ для исключения наложений
 
   useEffect(() => {
+    let timerId: NodeJS.Timeout;
+
     const updatePages = () => {
       if (!containerRef.current || !textRef.current) return;
       
       const width = Math.floor(containerRef.current.clientWidth);
+      if (width === 0) return; // Игнорируем пересчет, когда контейнер скрыт (display: none)
+      
       setContainerWidth(width);
       
       const scrollWidth = textRef.current.scrollWidth;
@@ -42,17 +46,19 @@ export function PagedText({ content, isCapsule = false, renderFooter }: PagedTex
 
     // Use a ResizeObserver to detect when the container or text changes size
     const resizeObserver = new ResizeObserver(() => {
-      updatePages();
+      // Даем браузеру время на отрисовку колонок после display: block
+      clearTimeout(timerId);
+      timerId = setTimeout(updatePages, 50);
     });
 
     if (containerRef.current) resizeObserver.observe(containerRef.current);
     if (textRef.current) resizeObserver.observe(textRef.current);
 
     // Initial calculation
-    const timer = setTimeout(updatePages, 50);
+    timerId = setTimeout(updatePages, 50);
     
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timerId);
       resizeObserver.disconnect();
     };
   }, [content, currentPage]);

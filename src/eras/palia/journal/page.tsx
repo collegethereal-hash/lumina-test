@@ -347,6 +347,9 @@ function JournalContent() {
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editMood, setEditMood] = useState("");
+  
+  // Mobile View State
+  const [mobileView, setMobileView] = useState<'content' | 'comments'>('content');
 
   // Pagination states for Modal
   const [notePage, setNotePage] = useState(0);
@@ -376,6 +379,7 @@ function JournalContent() {
     if (selectedNote) {
       setNotePage(0);
       setCommentPage(0);
+      setMobileView('content');
       setTimeout(calculatePages, 100);
       window.addEventListener('resize', calculatePages);
       return () => window.removeEventListener('resize', calculatePages);
@@ -1447,8 +1451,36 @@ function JournalContent() {
             >
               <div className="absolute -inset-10 bg-gradient-to-br from-amber-400/10 via-transparent to-pink-400/10 rounded-full blur-2xl opacity-70" />
               <div className="relative z-10 bg-[#fdfaf3] rounded-[2rem] md:rounded-[3rem] border-8 md:border-[12px] border-[#e6d5bc] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[90vh] md:h-[80vh]">
+                
+                {/* Mobile Tabs */}
+                <div className="md:hidden flex bg-[#e6d5bc]/30 p-1.5 rounded-2xl mx-4 mt-4 shrink-0 relative z-20">
+                  <button 
+                    onClick={() => setMobileView('content')} 
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2", 
+                      mobileView === 'content' ? "bg-white text-[#5c4a33] shadow-sm" : "text-[#8b7355]"
+                    )}
+                  >
+                    <BookOpen size={14} />
+                    Запись
+                  </button>
+                  <button 
+                    onClick={() => setMobileView('comments')} 
+                    className={cn(
+                      "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2", 
+                      mobileView === 'comments' ? "bg-white text-[#5c4a33] shadow-sm" : "text-[#8b7355]"
+                    )}
+                  >
+                    <MessageCircle size={14} />
+                    Комментарии ({selectedNote.comments.length})
+                  </button>
+                </div>
+
                 {/* Left Column: Note Content */}
-                <div className="flex-[1.5] md:flex-1 flex flex-col min-w-0 border-b-4 md:border-b-0 md:border-r-4 border-[#e6d5bc]/30 relative overflow-hidden h-full">
+                <div className={cn(
+                  "flex-[1.5] md:flex-1 flex-col min-w-0 md:border-r-4 border-[#e6d5bc]/30 relative overflow-hidden h-full",
+                  mobileView === 'content' ? "flex" : "hidden md:flex"
+                )}>
                     {editingId === selectedNote.id ? (
                       <div className="flex-1 p-5 md:p-12 overflow-hidden no-scrollbar">
                         <div className="space-y-4 md:space-y-6">
@@ -1633,7 +1665,10 @@ function JournalContent() {
                 </div>
 
                 {/* Right Column: Comments */}
-                <div className="w-full md:w-96 flex-[1] bg-[#fdfaf3] p-4 md:p-8 flex flex-col md:border-l-2 border-[#e6d5bc]/30 overflow-hidden relative">
+                <div className={cn(
+                  "w-full md:w-96 flex-[1] bg-[#fdfaf3] p-4 md:p-8 flex-col md:border-l-2 border-[#e6d5bc]/30 overflow-hidden relative",
+                  mobileView === 'comments' ? "flex" : "hidden md:flex"
+                )}>
                   <div className="flex items-center justify-between mb-6 pb-4 border-b-2 border-dashed border-[#e6d5bc]/70 shrink-0">
                     <h4 className="text-lg font-serif font-bold text-[#5c4a33] flex items-center gap-2">
                       <span className="text-xl">💌</span>
