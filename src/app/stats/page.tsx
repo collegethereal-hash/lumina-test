@@ -3,7 +3,7 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import PaliaStats from '@/eras/palia/stats/page';
-import PirateStats from '@/eras/pirate/stats/page';
+// import PirateStats from '@/eras/pirate/stats/page'; // TEMPORARILY DISABLED
 
 export default function StatsPage() {
   const { currentEra, isLoading } = useEra();
@@ -13,7 +13,7 @@ export default function StatsPage() {
   return (
     <>
       {currentEra === 'palia' && <PaliaStats />}
-      {currentEra === 'pirate' && <PirateStats />}
+      {/* {currentEra === 'pirate' && <PirateStats />} TEMPORARILY DISABLED */}
     </>
   );
 }

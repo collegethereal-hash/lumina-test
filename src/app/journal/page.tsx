@@ -3,7 +3,7 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import PaliaJournal from '@/eras/palia/journal/page';
-import PirateJournal from '@/eras/pirate/journal/page';
+// import PirateJournal from '@/eras/pirate/journal/page'; // TEMPORARILY DISABLED
 
 export default function JournalPage() {
   const { currentEra, isLoading } = useEra();
@@ -13,7 +13,7 @@ export default function JournalPage() {
   return (
     <>
       {currentEra === 'palia' && <PaliaJournal />}
-      {currentEra === 'pirate' && <PirateJournal />}
+      {/* {currentEra === 'pirate' && <PirateJournal />} TEMPORARILY DISABLED */}
     </>
   );
 }

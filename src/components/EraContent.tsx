@@ -3,8 +3,8 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import { Navbar as PaliaNavbar } from '@/eras/palia/components/Navbar';
-import { PirateNavbar } from '@/eras/pirate/components/PirateNavbar';
-import { PirateGarland } from '@/eras/pirate/components/PirateGarland';
+// import { PirateNavbar } from '@/eras/pirate/components/PirateNavbar'; // TEMPORARILY DISABLED
+// import { PirateGarland } from '@/eras/pirate/components/PirateGarland'; // TEMPORARILY DISABLED
 import { AnimatePresence, motion } from 'framer-motion';
 import { ModalProvider } from '@/context/ModalContext';
 
@@ -12,7 +12,7 @@ export function EraContent({ children }: { children: React.ReactNode }) {
   const { currentEra, isUIHidden } = useEra();
 
   return (
-    <>
+    <ModalProvider>
       <main>
         {children}
       </main>
@@ -26,7 +26,7 @@ export function EraContent({ children }: { children: React.ReactNode }) {
             className="fixed bottom-0 left-0 right-0 z-[9999]"
           >
             {currentEra === 'palia' && <PaliaNavbar />}
-            {currentEra === 'pirate' && <PirateNavbar />}
+            {/* {currentEra === 'pirate' && <PirateNavbar />} TEMPORARILY DISABLED */}
           </motion.div>
         )}
       </AnimatePresence>

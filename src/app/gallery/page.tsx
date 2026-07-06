@@ -3,7 +3,7 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import PaliaGallery from '@/eras/palia/gallery/page';
-import PirateGallery from '@/eras/pirate/gallery/page';
+// import PirateGallery from '@/eras/pirate/gallery/page'; // TEMPORARILY DISABLED
 
 export default function GalleryPage() {
   const { currentEra, isLoading } = useEra();
@@ -13,7 +13,7 @@ export default function GalleryPage() {
   return (
     <>
       {currentEra === 'palia' && <PaliaGallery />}
-      {currentEra === 'pirate' && <PirateGallery />}
+      {/* {currentEra === 'pirate' && <PirateGallery />} TEMPORARILY DISABLED */}
     </>
   );
 }

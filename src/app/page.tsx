@@ -3,7 +3,7 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import PaliaPage from '@/eras/palia/page';
-import PiratePage from '@/eras/pirate/page';
+// import PiratePage from '@/eras/pirate/page'; // TEMPORARILY DISABLED
 
 export default function Home() {
   const { currentEra, isLoading } = useEra();
@@ -22,7 +22,7 @@ export default function Home() {
   return (
     <>
       {currentEra === 'palia' && <PaliaPage />}
-      {currentEra === 'pirate' && <PiratePage />}
+      {/* {currentEra === 'pirate' && <PiratePage />} TEMPORARILY DISABLED */}
     </>
   );
 }

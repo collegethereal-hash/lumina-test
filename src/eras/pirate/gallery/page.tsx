@@ -7,8 +7,10 @@ import {
   Fish, Anchor, MessageCircle, Send, Trash2, 
   Volume2, VolumeX, Sparkles, Waves, Flame,
   Trophy, BookOpen, User, RefreshCw, X, Heart, Music,
-  Compass, Map as MapIcon, Navigation
+  Compass, Map as MapIcon, Navigation,
+  ZoomIn, ZoomOut, Coins, Users, Crosshair, Skull, Crown, Wind, Sword, Ship
 } from "lucide-react";
+import { useData } from '@/components/DataProvider';
 import FishingScene3D from '@/eras/pirate/components/FishingScene3D';
 import Campfire3D from '@/eras/pirate/components/Campfire3D';
 import Aquarium3D from '@/eras/pirate/components/Aquarium3D';
@@ -25,6 +27,23 @@ export default function PirateGallery() {
   const [isMuted, setIsMuted] = useState(false);
   const [activeTab, setActiveTab] = useState<'fishing' | 'collection' | 'aquarium'>('fishing');
   const [showFishingUI, setShowFishingUI] = useState(false);
+  const [mode, setMode] = useState<'fishing' | 'fire'>('fishing');
+  const [shipPos, setShipPos] = useState({ x: 50, y: 50 });
+  const [activeEnemy, setActiveEnemy] = useState<any>(null);
+  const [crew, setCrew] = useState(50);
+  const [sunkShips, setSunkShips] = useState(0);
+  const [fishingState, setFishingState] = useState<'idle' | 'waiting' | 'bite' | 'caught'>('idle');
+  const [catchProgress, setCatchProgress] = useState(0);
+  const [caughtFish, setCaughtFish] = useState<any>(null);
+  const [inventory, setInventory] = useState<any[]>([]);
+  
+  const decorations = useMemo(() => [...Array(20)].map((_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: 50 + Math.random() * 150,
+    opacity: 0.1 + Math.random() * 0.2
+  })), []);
 
   // Ship Classes
   const SHIP_CLASSES = [
@@ -273,6 +292,7 @@ export default function PirateGallery() {
                 </h1>
              </div>
           </div>
+        </header>
 
       {/* Draggable Map Container (The World) */}
       <motion.div 
@@ -317,7 +337,7 @@ export default function PirateGallery() {
                 }}
               >
               </div>
-            )}
+            ))}
 
             {/* Ambient Animated Ships (Beautiful) */}
             {[...Array(30)].map((_, i) => {

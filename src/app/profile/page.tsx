@@ -3,7 +3,7 @@
 import React from 'react';
 import { useEra } from '@/context/EraContext';
 import PaliaProfile from '@/eras/palia/profile/page';
-import PirateProfile from '@/eras/pirate/profile/page';
+// import PirateProfile from '@/eras/pirate/profile/page'; // TEMPORARILY DISABLED
 
 export default function ProfilePage() {
   const { currentEra, isLoading } = useEra();
@@ -13,7 +13,7 @@ export default function ProfilePage() {
   return (
     <>
       {currentEra === 'palia' && <PaliaProfile />}
-      {currentEra === 'pirate' && <PirateProfile />}
+      {/* {currentEra === 'pirate' && <PirateProfile />} TEMPORARILY DISABLED */}
     </>
   );
 }

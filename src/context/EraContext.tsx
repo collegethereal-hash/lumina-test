@@ -24,8 +24,8 @@ export function EraProvider({ children }: { children: React.ReactNode }) {
       try {
         // 1. Сначала проверяем localStorage для мгновенной загрузки
         const savedEra = localStorage.getItem('lumina_era') as EraType;
-        if (savedEra && (savedEra === 'palia' || savedEra === 'pirate')) {
-          setCurrentEra(savedEra);
+        if (savedEra && (savedEra === 'palia' /* || savedEra === 'pirate' TEMPORARILY DISABLED */)) {
+          setCurrentEra('palia'); // Force palia for now
         }
 
         // 2. Получаем актуальную эпоху из Supabase
@@ -36,9 +36,11 @@ export function EraProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         if (data?.value && (data.value === 'palia' || data.value === 'pirate')) {
-          const eraValue = data.value as EraType;
-          setCurrentEra(eraValue);
-          localStorage.setItem('lumina_era', eraValue);
+          // const eraValue = data.value as EraType;
+          // setCurrentEra(eraValue);
+          // localStorage.setItem('lumina_era', eraValue);
+          setCurrentEra('palia'); // Force palia for now
+          localStorage.setItem('lumina_era', 'palia');
         }
       } catch (err) {
         console.error('Error fetching era:', err);
@@ -51,6 +53,12 @@ export function EraProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setEra = async (era: EraType) => {
+    // ВРЕМЕННО ОТКЛЮЧЕНО: блокируем переключение на pirate
+    if (era === 'pirate') {
+      console.warn('Pirate era is temporarily disabled.');
+      return;
+    }
+
     setCurrentEra(era);
     localStorage.setItem('lumina_era', era);
     
