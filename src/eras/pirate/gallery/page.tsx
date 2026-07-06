@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { 
   Fish, Anchor, MessageCircle, Send, Trash2, 
   Volume2, VolumeX, Sparkles, Waves, Flame,
@@ -13,60 +14,124 @@ import Campfire3D from '@/eras/pirate/components/Campfire3D';
 import Aquarium3D from '@/eras/pirate/components/Aquarium3D';
 import { cn } from "@/lib/utils";
 
-// --- FISH DATABASE ---
-const FISH_TYPES = [
-  { id: 'f1', name: 'Небесный Окунь', rarity: 'common', price: 10, icon: '🐟', weight: '0.5-1.5 кг', color: 'text-blue-600' },
-  { id: 'f2', name: 'Радужный Карась', rarity: 'common', price: 8, icon: '🐠', weight: '0.3-0.8 кг', color: 'text-orange-600' },
-  { id: 'f3', name: 'Серебряная Плотва', rarity: 'common', price: 5, icon: '🐡', weight: '0.2-0.4 кг', color: 'text-stone-500' },
-  { id: 'f4', name: 'Изумрудная Щука', rarity: 'rare', price: 50, icon: '🦈', weight: '2-5 кг', color: 'text-emerald-700' },
-  { id: 'f5', name: 'Королевский Сом', rarity: 'rare', price: 75, icon: '🐋', weight: '5-15 кг', color: 'text-indigo-700' },
-  { id: 'f6', name: 'Огненный Лосось', rarity: 'rare', price: 100, icon: '🐟', weight: '3-7 кг', color: 'text-red-700' },
-  { id: 'f7', name: 'Золотая Рыбка', rarity: 'epic', price: 500, icon: '✨', weight: '0.1 кг', color: 'text-amber-600' },
-  { id: 'f8', name: 'Лунный Марлин', rarity: 'epic', price: 1000, icon: '🐬', weight: '50-100 кг', color: 'text-sky-600' },
-  { id: 'f9', name: 'Мини-Кракен', rarity: 'legendary', price: 5000, icon: '🦑', weight: '200+ кг', color: 'text-purple-700' },
-];
-
-export default function FishingPage() {
-  const [isUnderDevelopment] = useState(false); // Switch to false to restore fishing
-
-  if (isUnderDevelopment) {
-    return (
-      <div className="relative min-h-screen bg-[#f4ebd0] text-stone-900 font-serif flex flex-col items-center justify-center overflow-hidden">
-        {/* Background Decor - Old Map style */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 text-center space-y-4"
-        >
-          <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none">
-            <span className="text-amber-950">В</span> <span className="text-amber-600">разработке</span>
-          </h1>
-          <p className="text-xl md:text-2xl text-amber-900/40 italic font-serif">
-            Скоро здесь будет что-то интересное...
-          </p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  const [fishingState, setFishingState] = useState<'idle' | 'waiting' | 'bite' | 'caught'>('idle');
-  const [mode, setMode] = useState<'fishing' | 'fire'>('fishing');
-  const [caughtFish, setCaughtFish] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
+export default function PirateGallery() {
+  const router = useRouter();
+  const { moments } = useData();
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
+  const [scale, setScale] = useState(0.8); // Default zoomed out slightly
+  
+  // Gamification State
   const [gold, setGold] = useState(1500);
   const [isMuted, setIsMuted] = useState(false);
   const [activeTab, setActiveTab] = useState<'fishing' | 'collection' | 'aquarium'>('fishing');
   const [showFishingUI, setShowFishingUI] = useState(false);
 
-  // Mini-game State
-  const [timing, setTiming] = useState(50);
-  const [direction, setDirection] = useState<'left' | 'right'>('right');
-  const [catchProgress, setCatchProgress] = useState(0);
+  // Ship Classes
+  const SHIP_CLASSES = [
+    { type: 'Sloop', name: 'Торговая Шхуна', minStrength: 5, maxStrength: 15, minReward: 100, maxReward: 300, icon: 'ship' },
+    { type: 'Brig', name: 'Пиратский Бриг', minStrength: 20, maxStrength: 40, minReward: 400, maxReward: 800, icon: 'ship' },
+    { type: 'Frigate', name: 'Британский Фрегат', minStrength: 45, maxStrength: 70, minReward: 900, maxReward: 1800, icon: 'ship' },
+    { type: 'Galleon', name: 'Испанский Галеон', minStrength: 75, maxStrength: 110, minReward: 2000, maxReward: 4000, icon: 'ship' },
+    { type: 'ManOWar', name: 'Королевский Мановар', minStrength: 120, maxStrength: 200, minReward: 5000, maxReward: 10000, icon: 'crown' },
+    { type: 'Ghost', name: 'Летучий Голландец', minStrength: 150, maxStrength: 300, minReward: 15000, maxReward: 30000, icon: 'skull' },
+  ];
+
+  const generateRandomEnemy = () => {
+    const shipClass = SHIP_CLASSES[Math.floor(Math.random() * SHIP_CLASSES.length)];
+    const strength = Math.floor(Math.random() * (shipClass.maxStrength - shipClass.minStrength + 1)) + shipClass.minStrength;
+    const reward = Math.floor(Math.random() * (shipClass.maxReward - shipClass.minReward + 1)) + shipClass.minReward;
+    
+    return {
+      id: `e-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      x: Math.random() * 90 + 5,
+      y: Math.random() * 90 + 5,
+      strength,
+      reward,
+      name: shipClass.name,
+      shipType: shipClass.type,
+      defeated: false
+    };
+  };
+
+  const initialEnemies = useMemo(() => [
+     { id: 'e1', x: 25, y: 35, strength: 15, reward: 300, name: 'Испанский Галеон', shipType: 'Galleon', defeated: false },
+     { id: 'e2', x: 75, y: 20, strength: 25, reward: 600, name: 'Британский Фрегат', shipType: 'Frigate', defeated: false },
+     { id: 'e3', x: 60, y: 80, strength: 40, reward: 1200, name: 'Летучий Голландец', shipType: 'Ghost', defeated: false },
+     { id: 'e4', x: 15, y: 70, strength: 5, reward: 100, name: 'Торговая Шхуна', shipType: 'Sloop', defeated: false },
+     { id: 'e5', x: 85, y: 45, strength: 30, reward: 800, name: 'Пиратский Бриг', shipType: 'Brig', defeated: false },
+     { id: 'e6', x: 45, y: 15, strength: 10, reward: 200, name: 'Рыболовецкая Шхуна', shipType: 'Sloop', defeated: false },
+   ], []);
+
+  const [liveEnemies, setLiveEnemies] = useState<any[]>([]);
+
+  // Load and check battle results
+  useEffect(() => {
+    // 1. Load enemies from localStorage or initial
+    const savedEnemies = localStorage.getItem('pirate_enemies');
+    let currentEnemies = (savedEnemies && JSON.parse(savedEnemies).length > 0) 
+      ? JSON.parse(savedEnemies) 
+      : initialEnemies;
+
+    // 2. Check if we just returned from a battle
+    const battleResultStr = localStorage.getItem('last_battle_result');
+    if (battleResultStr) {
+      const result = JSON.parse(battleResultStr);
+      localStorage.removeItem('last_battle_result');
+
+        if (result.winner === 'player') {
+          // Find the enemy we fought and replace them with a new random one
+          currentEnemies = currentEnemies.map((e: any) => {
+            if (e.id === result.enemyId) {
+              return generateRandomEnemy();
+            }
+            return e;
+          });
+          
+          // Update stats and gold using the ACTUAL value from battle result
+          const oldSunk = parseInt(localStorage.getItem('pirate_sunk_ships') || '0', 10);
+          const newSunk = oldSunk + 1;
+          const oldGold = parseInt(localStorage.getItem('pirate_gold') || '1500', 10);
+          const newGold = oldGold + (result.reward || 500);
+          
+          setGold(newGold);
+          setSunkShips(newSunk);
+          
+          localStorage.setItem('pirate_gold', newGold.toString());
+          localStorage.setItem('pirate_sunk_ships', newSunk.toString());
+        } else if (result.winner === 'enemy') {
+        // Loss handling: crew is already updated by LairPage
+        alert("Поражение! Враг разгромил нас. Мы отступили с большими потерями...");
+      }
+    }
+
+    setLiveEnemies(currentEnemies);
+    localStorage.setItem('pirate_enemies', JSON.stringify(currentEnemies));
+
+    // Load other stats
+    const savedGold = localStorage.getItem('pirate_gold');
+    const savedCrew = localStorage.getItem('pirate_crew');
+    const savedSunk = localStorage.getItem('pirate_sunk_ships');
+    
+    if (savedGold) setGold(parseInt(savedGold, 10));
+    if (savedCrew) setCrew(parseInt(savedCrew, 10));
+    if (savedSunk) setSunkShips(parseInt(savedSunk, 10));
+    
+    const savedPos = localStorage.getItem('pirate_ship_pos');
+    if (savedPos) setShipPos(JSON.parse(savedPos));
+  }, []);
+
+  // Save state helpers
+  useEffect(() => {
+    localStorage.setItem('pirate_gold', gold.toString());
+    localStorage.setItem('pirate_crew', crew.toString());
+    localStorage.setItem('pirate_enemies', JSON.stringify(liveEnemies));
+  }, [gold, crew, liveEnemies]);
+
+  const getDistance = (p1: { x: number, y: number }, p2: { x: number, y: number }) => {
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+  };
+
+  const isCloseEnough = activeEnemy ? getDistance(shipPos, activeEnemy) < 8 : false;
 
   // Chat State (Between US)
   const [message, setMessage] = useState('');
@@ -127,51 +192,22 @@ export default function FishingPage() {
     localStorage.setItem('pirate_us_chat', JSON.stringify(newChat));
   };
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chat]);
+  const handleAttack = () => {
+    if (!activeEnemy || !isCloseEnough) return;
 
-  const castLine = () => {
-    setShowFishingUI(true);
-    setFishingState('waiting');
-    const waitTime = 3000 + Math.random() * 5000;
-    setTimeout(() => setFishingState('bite'), waitTime);
-  };
+    // Save battle context to localStorage
+    localStorage.setItem('current_battle_enemy', JSON.stringify({
+      id: activeEnemy.id,
+      name: activeEnemy.name,
+      strength: activeEnemy.strength,
+      reward: activeEnemy.reward
+    }));
+    
+    // Save current ship position to return here later
+    localStorage.setItem('pirate_ship_pos', JSON.stringify(shipPos));
 
-  useEffect(() => {
-    let timer: any;
-    if (fishingState === 'bite') {
-      timer = setInterval(() => {
-        setTiming(prev => {
-          if (prev >= 95) setDirection('left');
-          if (prev <= 5) setDirection('right');
-          return direction === 'right' ? prev + 5 : prev - 5;
-        });
-      }, 50);
-    }
-    return () => clearInterval(timer);
-  }, [fishingState, direction]);
-
-  const reelIn = () => {
-    if (fishingState !== 'bite') return;
-    if (timing > 35 && timing < 65) {
-      const newProgress = catchProgress + 25;
-      setCatchProgress(newProgress);
-      if (newProgress >= 100) {
-        const random = Math.random();
-        let fish;
-        if (random > 0.98) fish = FISH_TYPES[8];
-        else if (random > 0.9) fish = FISH_TYPES[6];
-        else if (random > 0.6) fish = FISH_TYPES[Math.floor(Math.random() * 3) + 3];
-        else fish = FISH_TYPES[Math.floor(Math.random() * 3)];
-        setCaughtFish(fish);
-        setFishingState('caught');
-        saveInventory([...inventory, { ...fish, date: new Date().toISOString() }]);
-        setCatchProgress(0);
-      }
-    } else {
-      setCatchProgress(prev => Math.max(0, prev - 10));
-    }
+    // Navigate to Lair
+    router.push('/lair');
   };
 
   const handleSend = () => {
@@ -195,13 +231,27 @@ export default function FishingPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f4ebd0] text-stone-900 font-serif overflow-y-auto overflow-x-hidden scrollbar-hide">
-      {/* Background Decor - Old Map style */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
-        <div className="absolute -top-20 -left-20 w-96 h-96 bg-amber-700/5 rounded-full blur-[100px]" />
-        <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-blue-700/5 rounded-full blur-[100px]" />
+    <div className="relative w-full h-screen bg-[#020a17] text-amber-100 font-serif overflow-hidden select-none">
+      
+      {/* Fleet Stats (HUD) */}
+      <div className="absolute top-6 w-full px-6 z-50 flex justify-between items-start pointer-events-none">
+         <div className="flex items-center gap-2 bg-[#051329]/90 p-2 rounded-2xl border-2 border-sky-500/20 backdrop-blur-md pointer-events-auto shadow-[0_0_30px_rgba(14,165,233,0.2)]">
+           <button onClick={() => setScale(s => Math.max(0.4, s - 0.2))} className="p-2 text-sky-400 hover:bg-sky-500/10 rounded-xl transition-colors">
+             <ZoomOut size={20} />
+           </button>
+           <div className="px-4 border-x border-sky-500/20 text-sky-300 font-black uppercase tracking-widest text-[10px] whitespace-nowrap text-center leading-tight">
+             Карта <br/>Архипелага
+           </div>
+           <button onClick={() => setScale(s => Math.min(1.5, s + 0.2))} className="p-2 text-sky-400 hover:bg-sky-500/10 rounded-xl transition-colors">
+             <ZoomIn size={20} />
+           </button>
+         </div>
+
+         <div className="flex flex-col md:flex-row gap-4 pointer-events-auto">
+            <ResourceBadge icon={<Coins size={16} />} value={gold} label="Дублоны" color="text-amber-400" />
+            <ResourceBadge icon={<Users size={16} />} value={crew} label="Команда" color="text-sky-400" />
+            <ResourceBadge icon={<Crosshair size={16} />} value={sunkShips} label="Потоплено" color="text-red-400" />
+         </div>
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-20 min-h-screen flex flex-col gap-12 pb-48">
@@ -224,75 +274,81 @@ export default function FishingPage() {
              </div>
           </div>
 
-          <div className="flex items-center justify-center w-full md:w-auto relative z-10">
-            <button 
-              onClick={() => setMode(mode === 'fishing' ? 'fire' : 'fishing')}
-              className="px-12 py-5 bg-amber-500 text-slate-900 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-amber-400 transition-all shadow-xl border-b-8 border-amber-700 active:border-b-0 active:translate-y-2 flex items-center justify-center gap-4"
-            >
-              {mode === 'fishing' ? <Flame size={20} /> : <Fish size={20} />}
-              {mode === 'fishing' ? 'К костру' : 'На рыбалку'}
-            </button>
-          </div>
-        </header>
+      {/* Draggable Map Container (The World) */}
+      <motion.div 
+        drag
+        dragConstraints={{ left: -7500, right: 0, top: -7500, bottom: 0 }} // Correct constraints for 8000px map
+        dragElastic={0.05}
+        dragMomentum={false}
+        initial={{ x: -2000, y: -2000 }}
+        animate={{ scale: scale }}
+        transition={{ scale: { type: 'spring', stiffness: 100, damping: 25 } }}
+        className="absolute w-[8000px] h-[8000px] cursor-grab active:cursor-grabbing origin-center z-10"
+      >
+         {/* --- RICH MAP TEXTURE --- */}
+         <div className="absolute inset-0 bg-[#061a38]/40 border-8 border-sky-900/30 overflow-hidden shadow-[inset_0_0_1000px_rgba(2,10,23,1)]">
+            
+            {/* Navigational Grid */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(14,165,233,0.15)_2px,transparent_2px),linear-gradient(90deg,rgba(14,165,233,0.15)_2px,transparent_2px)] bg-[size:400px_400px]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(14,165,233,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(14,165,233,0.05)_1px,transparent_1px)] bg-[size:100px_100px]" />
 
-        {/* Main Grid */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-10">
-          
-          {/* LEFT: Gameplay */}
-          <div className="lg:col-span-8 flex flex-col gap-10">
-            {/* Tabs - Wooden Buttons */}
-            {mode === 'fishing' && (
-              <div className="flex justify-center">
-                <div className="flex flex-wrap gap-4 p-3 bg-white/40 border-4 border-amber-900/10 rounded-[2.5rem] w-fit shadow-2xl backdrop-blur-md">
-                  {[
-                    { id: 'fishing', label: 'Действие', icon: mode === 'fishing' ? <Fish size={18} /> : <Flame size={18} />, show: true },
-                    { id: 'collection', label: 'Мой Садок', icon: <BookOpen size={18} />, show: mode === 'fishing' },
-                    { id: 'aquarium', label: 'Аквариум', icon: <Waves size={18} />, show: mode === 'fishing' }
-                  ].filter(tab => tab.show).map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={cn(
-                        "flex items-center gap-3 px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all",
-                        activeTab === tab.id 
-                          ? "bg-amber-500 text-slate-950 shadow-xl scale-105" 
-                          : "bg-amber-900/10 text-amber-900/60 hover:bg-amber-900/20 hover:text-amber-900"
-                      )}
-                    >
-                      {tab.icon} {tab.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Giant Rhumb Lines */}
+            <div className="absolute top-[50%] left-[50%] w-[1px] h-[200%] bg-sky-400/20 -rotate-45 transform -translate-x-1/2 -translate-y-1/2 origin-top" />
+            <div className="absolute top-[50%] left-[50%] w-[1px] h-[200%] bg-sky-400/20 rotate-45 transform -translate-x-1/2 -translate-y-1/2 origin-top" />
+
+            {/* Map Decorative Compasses */}
+            <div className="absolute top-[20%] left-[20%] opacity-[0.1] pointer-events-none">
+               <Compass size={1500} className="text-sky-300" />
+            </div>
+            <div className="absolute bottom-[20%] right-[20%] opacity-[0.05] pointer-events-none">
+               <Navigation size={2000} className="text-sky-300" />
+            </div>
+
+            {/* Generated Map Details (Islands, Coastlines, Whirlpools) to fill the void */}
+            {decorations.map((dec, i) => (
+              <div 
+                key={dec.id} 
+                className="absolute border border-sky-400/20 rounded-[40%_60%_70%_30%] mix-blend-overlay flex flex-col items-center justify-center"
+                style={{ 
+                  left: `${dec.x}%`, top: `${dec.y}%`, 
+                  width: `${dec.size}px`, height: `${dec.size}px`, 
+                  opacity: dec.opacity,
+                  backgroundColor: 'rgba(14,165,233,0.05)'
+                }}
+              >
               </div>
             )}
 
-            {/* Content Stage - Map Style */}
-            <div className={cn(
-              "flex-1 bg-[#f2e2ba] border-[16px] border-[#3e2723]/10 rounded-[4rem] relative overflow-hidden shadow-[20px_20px_60px_rgba(0,0,0,0.1)] min-h-[650px]",
-              mode === 'fire' && "h-full"
-            )}>
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
-              
-              <div className="absolute inset-0 overflow-hidden scrollbar-hide">
-                <AnimatePresence mode="wait">
-                  {activeTab === 'fishing' && (
-                    <motion.div key="action" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full flex flex-col">
-                      {mode === 'fishing' ? (
-                        <div className="flex-1 relative">
-                          <AnimatePresence mode="wait">
-                            {!showFishingUI ? (
-                              <motion.div 
-                                    key="lore"
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 1.1 }}
-                                    className="absolute inset-0 p-20 flex flex-col items-center justify-center text-center space-y-12"
-                                  >
-                                    <div className="space-y-6">
-                                      <p className="text-2xl text-amber-900/70 leading-relaxed font-serif italic px-12 max-w-3xl mx-auto">
-                                        {fishingLore}
-                                      </p>
-                                    </div>
+            {/* Ambient Animated Ships (Beautiful) */}
+            {[...Array(30)].map((_, i) => {
+               const startX = (i * 137.5) % 100; // Deterministic random-ish distribution
+               const startY = (i * 151.1) % 100;
+               const duration = 20 + (i % 10) * 5;
+               return (
+                 <motion.div
+                   key={`ambient-ship-${i}`}
+                   className="absolute z-10 pointer-events-none flex flex-col items-center"
+                   style={{ left: `${startX}%`, top: `${startY}%` }}
+                   animate={{ 
+                     x: [0, 150, 0, -150, 0],
+                     y: [0, 80, 160, 80, 0],
+                     rotate: [0, 10, 0, -10, 0]
+                   }}
+                   transition={{ duration, repeat: Infinity, ease: "easeInOut", delay: -(i * 2) }}
+                 >
+                   <div className="relative text-sky-200/10">
+                     <Ship size={80} className="drop-shadow-[0_0_10px_rgba(14,165,233,0.1)]" />
+                     {/* Wake effect */}
+                     <motion.div 
+                       className="absolute -bottom-1 right-4 w-16 h-3 bg-sky-400/20 blur-md rounded-full"
+                       animate={{ opacity: [0.1, 0.3, 0.1], scale: [1, 1.1, 1] }}
+                       transition={{ duration: 4, repeat: Infinity }}
+                     />
+                   </div>
+                 </motion.div>
+               );
+            })}
+         </div>
 
                                     <button
                                       onClick={castLine}
@@ -373,17 +429,68 @@ export default function FishingPage() {
                                       </motion.div>
                                     )}
 
-                                    {fishingState === 'caught' && caughtFish && (
-                                      <motion.div 
-                                        key="caught"
-                                        initial={{ y: 100, opacity: 0 }}
-                                        animate={{ y: 0, opacity: 1 }}
-                                        className="pointer-events-auto bg-[#fdf6e3] p-16 rounded-[4rem] border-[12px] border-[#3d2723]/10 shadow-[0_40px_100px_rgba(0,0,0,0.2)] max-w-lg w-full relative overflow-hidden"
-                                      >
-                                        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40" />
-                                        <div className="relative">
-                                          <div className="text-[12rem] drop-shadow-[20px_20px_40px_rgba(0,0,0,0.2)] animate-float text-center">{caughtFish.icon}</div>
-                                        </div>
+         {/* 2. Enemy Ships */}
+         {liveEnemies.map(enemy => {
+           const isBoss = enemy.shipType === 'ManOWar' || enemy.shipType === 'Ghost';
+           const isWeak = enemy.shipType === 'Sloop';
+           
+           return (
+             <div
+               key={enemy.id}
+               className="absolute transform -translate-x-1/2 -translate-y-1/2 group z-30 cursor-pointer"
+               style={{ left: `${enemy.x}%`, top: `${enemy.y}%` }}
+               onClick={() => !enemy.defeated && setActiveEnemy(enemy)}
+             >
+                <motion.div 
+                  whileHover={!enemy.defeated ? { scale: 1.15 } : {}}
+                  animate={!enemy.defeated ? { 
+                    y: isBoss ? [-25, 25, -25] : [-15, 15, -15], 
+                    rotate: isBoss ? [-5, 5, -5] : [-3, 3, -3] 
+                  } : {}}
+                  transition={{ duration: isBoss ? 4 : 6, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative flex flex-col items-center"
+                >
+                   {enemy.defeated ? (
+                     <div className="p-6 bg-red-900/10 rounded-full border-2 border-red-900/30 opacity-50">
+                       <Skull size={48} className="text-red-900/40" />
+                     </div>
+                   ) : (
+                     <>
+                       <div className={cn(
+                         "p-6 rounded-full border-4 flex items-center justify-center shadow-2xl transition-all",
+                         isBoss 
+                           ? "bg-purple-900/90 border-purple-500 shadow-[0_0_80px_rgba(168,85,247,0.6)] scale-125" 
+                           : isWeak 
+                             ? "bg-slate-800/90 border-slate-500 shadow-[0_0_30px_rgba(100,116,139,0.3)] scale-90"
+                             : "bg-[#3a0a0a]/90 border-red-600 shadow-[0_0_60px_rgba(220,38,38,0.5)]"
+                       )}>
+                         {enemy.shipType === 'Ghost' ? (
+                           <Skull size={isBoss ? 72 : 56} className="text-teal-400 drop-shadow-[0_0_15px_rgba(45,212,191,0.8)]" />
+                         ) : enemy.shipType === 'ManOWar' ? (
+                           <Crown size={72} className="text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]" />
+                         ) : (
+                           <Ship size={isWeak ? 40 : 56} className={cn(
+                             isWeak ? "text-slate-400" : "text-red-500",
+                             "drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]"
+                           )} />
+                         )}
+                       </div>
+                       
+                       {/* Label with dynamic color */}
+                       <div className={cn(
+                         "absolute -bottom-14 whitespace-nowrap px-4 py-2 bg-black/90 rounded-xl border flex items-center gap-2 drop-shadow-xl z-10",
+                         isBoss ? "border-purple-500 text-purple-300" : isWeak ? "border-slate-500 text-slate-400" : "border-red-600 text-red-400"
+                       )}>
+                         {isBoss ? <Skull size={14} /> : isWeak ? <Anchor size={14} /> : <Sword size={14} />}
+                         <span className="font-black uppercase tracking-widest text-[10px]">{enemy.name}</span>
+                         <span className="ml-2 px-1.5 py-0.5 bg-white/10 rounded text-[9px] border border-white/5">lvl {enemy.strength}</span>
+                       </div>
+                     </>
+                   )}
+                </motion.div>
+             </div>
+           );
+         })}
 
                                         <div className="text-center space-y-6 relative z-10">
                                           <div className="space-y-2">
@@ -496,16 +603,58 @@ export default function FishingPage() {
               <button onClick={() => saveChat([])} className="p-3 text-amber-900/10 hover:text-red-700 transition-colors"><Trash2 size={24} /></button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-10 space-y-8 scrollbar-thin scrollbar-thumb-amber-900/10 relative z-10">
-              {chat.map((msg, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, x: msg.role === 'me' ? 20 : -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className={cn(
-                    "flex gap-4 max-w-[90%] items-start text-left",
-                    msg.role === 'me' ? "ml-auto flex-row-reverse" : "mr-auto"
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                   <button 
+                     onClick={() => handleSailTo(activeEnemy.x, activeEnemy.y)}
+                     className="py-4 bg-emerald-600/20 text-emerald-400 border-2 border-emerald-500/50 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600/40 transition-colors flex items-center justify-center gap-2"
+                   >
+                     <Wind size={16} /> Плыть к ним
+                   </button>
+                   {isCloseEnough ? (
+                     <button 
+                      onClick={handleAttack}
+                      className="py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-[0_0_30px_rgba(220,38,38,0.4)] hover:bg-red-500 transition-colors flex items-center justify-center gap-2"
+                     >
+                       <Crosshair size={18} /> ЗАЛП!
+                     </button>
+                   ) : (
+                     <div className="py-4 bg-slate-800 text-slate-500 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 border-2 border-slate-700 opacity-60">
+                       Нужно подплыть ближе
+                     </div>
+                   )}
+                </div>
+             </div>
+          </ModalOverlay>
+        )}
+      </AnimatePresence>
+
+      {/* Tavern Modal */}
+      <AnimatePresence>
+        {activeTavern && (
+          <ModalOverlay onClose={() => setActiveTavern(null)}>
+             <div className="text-center space-y-4">
+                <div className="mx-auto w-32 h-32 bg-[#2a1a10] border-4 border-amber-600 rounded-full flex items-center justify-center text-amber-500 mb-6 shadow-[0_0_50px_rgba(217,119,6,0.5)]">
+                   {activeTavern.id.includes('t4') || activeTavern.id.includes('t5') ? <Castle size={64} /> : <Beer size={64} />}
+                </div>
+                <h2 className="text-5xl font-black uppercase tracking-tighter text-amber-100">{activeTavern.name}</h2>
+                <p className="text-sky-100/60 italic leading-relaxed">"Идеальное место, чтобы пополнить запасы и найти новых пиратов в команду."</p>
+                
+                <div className="bg-black/40 p-8 rounded-[2rem] border border-amber-600/30 flex flex-col items-center my-8 gap-6">
+                   <div className="text-center">
+                     <p className="text-xl font-bold text-amber-100">Нанять 5 матросов</p>
+                     <p className="text-xs font-black uppercase tracking-widest text-amber-500/60 flex items-center justify-center gap-2 mt-2"><Coins size={14}/> Стоимость: 100 дублонов</p>
+                   </div>
+                   <button 
+                    onClick={handleHire}
+                    className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-widest text-sm shadow-[0_0_30px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-transform"
+                   >
+                     Оплатить ром (Нанять)
+                   </button>
+                </div>
+
+                <button 
+                  onClick={() => handleSailTo(activeTavern.x, activeTavern.y)}
+                  className="w-full py-4 bg-emerald-600/20 text-emerald-400 border-2 border-emerald-500/50 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-emerald-600/40 transition-colors flex items-center justify-center gap-2 mt-4"
                 >
                   <div className={cn(
                     "w-10 h-10 rounded-xl border-4 flex items-center justify-center text-lg shrink-0 shadow-lg",

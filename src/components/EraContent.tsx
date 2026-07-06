@@ -12,8 +12,7 @@ export function EraContent({ children }: { children: React.ReactNode }) {
   const { currentEra, isUIHidden } = useEra();
 
   return (
-    <ModalProvider>
-      {currentEra === 'pirate' && <PirateGarland />}
+    <>
       <main>
         {children}
       </main>

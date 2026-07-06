@@ -304,22 +304,14 @@ export default function PirateDashboard() {
   ];
 
   return (
-    <div className="relative min-h-screen text-stone-900 font-serif selection:bg-amber-500/30 flex flex-col bg-[#f4ebd0]">
-      {/* Background Decor - Old Map style */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
-        <div className="absolute -top-20 -left-20 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px]" />
-        <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-[100px]" />
-      </div>
-
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-        className="relative z-10 flex-1 flex flex-col"
-      >
+    <div className="relative min-h-screen bg-[#000000] text-amber-100 font-serif overflow-x-hidden selection:bg-amber-500/30">
+      
+      {/* Ambient background glows */}
+      <div className="absolute top-[-150px] left-[-150px] w-[600px] h-[600px] bg-amber-600/10 rounded-full blur-[140px] pointer-events-none z-0" />
+      <div className="absolute bottom-[50px] right-[-150px] w-[700px] h-[700px] bg-red-600/10 rounded-full blur-[150px] pointer-events-none z-0" />
+      
+      {/* Wood pattern Overlay */}
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-[0.05] pointer-events-none z-0" />
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -336,7 +328,7 @@ export default function PirateDashboard() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6 pb-32 w-full">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-10 pb-32 space-y-12">
         
         {/* HEADER BLOCK */}
         <header className="flex flex-row justify-between items-center gap-6 border-b-4 border-amber-900/10 pb-12 relative">

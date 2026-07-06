@@ -244,7 +244,7 @@ export default function LairPage() {
              
              const playerSurvivors = players.length;
              const enemySurvivors = enemies.length;
-             const winner: 'player' | 'enemy' | 'draw' = playerSurvivors > enemySurvivors ? 'player' : (enemySurvivors > playerSurvivors ? 'enemy' : 'draw');
+             const winner = playerSurvivors > enemySurvivors ? 'player' : (enemySurvivors > playerSurvivors ? 'enemy' : 'draw');
              const capturedCrew = winner === 'player' ? Math.floor(enemySurvivors / 2) : 0;
              const goldEarned = winner === 'player' ? (enemyInfo?.reward || 500) : 0;
 
@@ -386,7 +386,7 @@ export default function LairPage() {
       <div className="absolute top-[-100px] left-[-100px] w-[500px] h-[500px] bg-cyan-600/20 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-[-100px] right-[-100px] w-[600px] h-[600px] bg-red-600/20 rounded-full blur-[100px] pointer-events-none" />
       
-      <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-40">
+      <div className="relative z-10 max-w-7xl mx-auto space-y-8 pb-32">
          
          {/* Header */}
          <div className="flex justify-between items-center border-b-2 border-amber-500/30 pb-4">

@@ -345,12 +345,125 @@ export default function PirateStatsPage() {
   };
 
   return (
-    <>
-      {view === 'dashboard' && <DashboardView {...viewProps} />}
-      {view === 'lobby' && <LobbyView {...viewProps} />}
-      {view === 'game' && <GameView {...viewProps} />}
-      {view === 'setup' && <SetupView {...viewProps} />}
+    <div className="relative min-h-screen bg-[#0a0a0a] text-amber-100 font-serif overflow-hidden">
+      
+      {/* Background Ambience */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-10" />
+        <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-red-950/20 via-[#0a0a0a] to-transparent" />
+        <div className="absolute bottom-0 right-0 w-full h-[600px] bg-[radial-gradient(ellipse_at_bottom_right,rgba(245,158,11,0.05)_0%,transparent_50%)]" />
+      </div>
 
+      <div className="relative z-10 max-w-7xl mx-auto px-4 pt-12 pb-32 space-y-12">
+        
+        {/* Header & Stats */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+           <div className="text-center md:text-left space-y-2">
+              <h1 className="text-6xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-amber-200 via-amber-500 to-amber-700 drop-shadow-lg">
+                Черный Рынок
+              </h1>
+              <p className="text-amber-500/50 italic tracking-widest text-lg">"Золото не имеет запаха, пока ты не купишь на него ром!"</p>
+           </div>
+
+           <div className="flex flex-wrap justify-center items-center gap-4 bg-slate-950/80 p-4 rounded-3xl border-2 border-amber-500/20 shadow-[0_0_50px_rgba(245,158,11,0.1)] backdrop-blur-md">
+              <div className="flex items-center gap-4 px-6 border-r border-amber-500/20">
+                 <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-500 border border-amber-500/20 shadow-inner">
+                   <Coins size={24} />
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/40">Казна</p>
+                   <p className="text-3xl font-bold text-amber-400 leading-none">{gold}</p>
+                 </div>
+              </div>
+              <div className="flex items-center gap-4 px-6">
+                 <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-500 border border-blue-500/20 shadow-inner">
+                   <Users size={24} />
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-500/40">Команда</p>
+                   <p className="text-3xl font-bold text-blue-400 leading-none">{crew}</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* Store Tabs */}
+        <div className="flex flex-wrap items-center justify-center gap-3">
+           {tabs.map(tab => (
+             <button
+               key={tab.id}
+               onClick={() => setActiveTab(tab.id as any)}
+               className={cn(
+                 "flex items-center gap-3 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all",
+                 activeTab === tab.id 
+                  ? "bg-amber-500 text-slate-950 shadow-[0_0_30px_rgba(245,158,11,0.4)] scale-105" 
+                  : "bg-slate-900/50 text-amber-500/50 border border-amber-500/10 hover:bg-slate-800 hover:text-amber-400"
+               )}
+             >
+               {tab.icon} <span>{tab.label}</span>
+             </button>
+           ))}
+        </div>
+
+        {/* Store Grid */}
+        <AnimatePresence mode="wait">
+           <motion.div 
+             key={activeTab}
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             exit={{ opacity: 0, y: -20 }}
+             transition={{ duration: 0.3 }}
+             className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
+           >
+              {(storeItems[activeTab as keyof typeof storeItems] || []).map((item) => {
+                const isOwned = inventory.includes(item.id);
+
+                return (
+                  <div 
+                    key={item.id}
+                    onClick={() => setSelectedItem(item)}
+                    className={cn(
+                      "relative p-6 rounded-[2.5rem] border-4 flex flex-col justify-between transition-all group overflow-hidden pirate-wood cursor-pointer shadow-xl",
+                      isOwned ? "border-emerald-500/30 opacity-70" : "border-amber-900/40 hover:border-amber-500/50 hover:shadow-[0_0_40px_rgba(245,158,11,0.2)]"
+                    )}
+                  >
+                     <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition-colors" />
+                     
+                     <div className="relative z-10 space-y-6">
+                        <div className="w-24 h-24 bg-[#1a1a1a] rounded-full border-4 border-amber-900/50 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(0,0,0,0.8)] group-hover:scale-110 group-hover:border-amber-500/50 transition-all">
+                          {item.icon}
+                        </div>
+                        
+                        <div className="text-center space-y-2">
+                           <h3 className="text-xl font-bold uppercase tracking-tight text-amber-100 leading-tight drop-shadow-md">{item.name}</h3>
+                           <p className="text-xs text-amber-100/40 italic leading-relaxed h-12 line-clamp-2">"{item.desc}"</p>
+                        </div>
+                     </div>
+
+                     <div className="relative z-10 mt-6 pt-6 border-t border-amber-500/10 flex items-center justify-between">
+                        {isOwned ? (
+                           <div className="w-full py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 rounded-xl font-black uppercase tracking-widest text-xs text-center flex justify-center items-center gap-2">
+                             <Sparkles size={14}/> В арсенале
+                           </div>
+                        ) : (
+                           <>
+                             <div className="flex items-center gap-2 text-amber-400 font-bold text-xl">
+                               <Coins size={20} /> {item.price}
+                             </div>
+                             <div className="p-3 bg-slate-800 rounded-xl text-amber-500/50 group-hover:text-amber-400 group-hover:bg-slate-700 transition-colors">
+                               <Info size={20} />
+                             </div>
+                           </>
+                        )}
+                     </div>
+                  </div>
+                );
+              })}
+           </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* DETAILED ITEM MODAL (LORE & BUY) */}
       <AnimatePresence>
         {debugLogs.length > 0 && (
           <div className="fixed bottom-6 left-6 z-[10000] w-72 space-y-2 pointer-events-none">

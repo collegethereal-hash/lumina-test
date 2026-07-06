@@ -16,30 +16,17 @@
 }
 
 .era-pirate {
-  --background: #1a1510; /* Lighter warm brown instead of almost black */
-  --foreground: #fef3c7;
-  --talia-lavender: #0c4a6e;
-  --talia-peach: #78350f;
-  --talia-sand: #1a1510;
-  --era-accent: #fbbf24;
+  --background: #000000; /* Deep Navy */
+  --foreground: #fef3c7; /* Amber/Parchment */
+  --talia-lavender: #0c4a6e; /* Deep Ocean */
+  --talia-peach: #78350f; /* Mahogany */
+  --talia-sand: #000000;
+  --era-accent: #fbbf24; /* Gold */
   
   --wood-dark: #3e2718;
   --wood-light: #5d3f2e;
   --ocean-blue: #0ea5e9;
   --gold-glow: rgba(251, 191, 36, 0.4); /* Stronger glow */
-}
-
-.garland-light {
-  width: 12px; /* Bigger */
-  height: 12px;
-  border-radius: 50%;
-  box-shadow: 0 0 15px 4px currentColor; /* Stronger shadow/glow */
-  animation: glow 1.5s ease-in-out infinite alternate;
-}
-
-@keyframes glow {
-  from { opacity: 0.7; filter: brightness(1); transform: scale(0.9); }
-  to { opacity: 1; filter: brightness(2.5); transform: scale(1.1); }
 }
 
 @theme inline {
@@ -70,7 +57,7 @@ html {
 }
 
 body {
-  background: #f4ebd0;
+  background: #000000;
   color: var(--foreground);
   font-family: 'Inter', sans-serif;
   min-height: 100vh;

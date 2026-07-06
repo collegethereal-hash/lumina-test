@@ -52,7 +52,7 @@ export default function PirateJournal() {
         <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-b from-transparent via-blue-950/10 to-black/40" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 pt-16 pb-40 space-y-12">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 pt-16 pb-32 space-y-12">
         <header className="text-center space-y-4">
           <motion.div
             initial={{ scale: 0 }}

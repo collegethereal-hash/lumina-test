@@ -98,7 +98,7 @@ export default function PirateStore() {
         <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(245,158,11,0.05)_0%,transparent_50%)]" />
       </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-12 pb-40 space-y-12">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-12 pb-32 space-y-12">
         
         {/* Header & Stats */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-8">

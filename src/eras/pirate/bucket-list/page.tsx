@@ -147,8 +147,9 @@ export default function PirateBucketList() {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#f4ebd0] text-stone-900 font-serif overflow-hidden">
-      {/* Background Decor - Old Map style */}
+    <div className="relative min-h-screen bg-[#1c120c] text-stone-800 font-serif overflow-hidden selection:bg-amber-800/30">
+      
+      {/* Background Decor: Wooden Table / Map Vibe */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/papyrus.png')] opacity-60" />
         <div className="absolute inset-0 bg-gradient-to-br from-amber-900/5 via-transparent to-amber-900/10" />
@@ -156,33 +157,25 @@ export default function PirateBucketList() {
         <div className="absolute -bottom-20 -right-20 w-96 h-96 bg-blue-700/5 rounded-full blur-[100px]" />
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-10 pb-40 md:pb-60 space-y-8 md:space-y-12">
-        {/* HEADER BLOCK */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b-4 border-amber-900/10 pb-8 md:pb-12">
-           <div className="text-left space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-900/10 bg-white/40 px-4 py-2 shadow-sm backdrop-blur-sm">
-                <Scroll size={14} className="text-amber-700/60" />
-                <span className="text-[9px] font-black uppercase tracking-[0.32em] text-amber-900/45">Кодекс чести капитанов</span>
-              </div>
-              <h1 className="text-4xl md:text-7xl font-black uppercase tracking-tighter text-amber-900 drop-shadow-sm">
-                 Кодекс <span className="text-amber-600">Тортуги</span>
-              </h1>
-              <p className="max-w-2xl text-sm md:text-base italic text-amber-900/55 whitespace-normal md:whitespace-nowrap overflow-hidden text-ellipsis">
-                Свод незыблемых правил, скреплённых нашей верностью и честью.
-              </p>
-           </div>
-
-           <div className="shrink-0 z-20 w-full md:w-auto">
-             <motion.button
-               whileHover={{ scale: 1.05, rotate: 2 }}
-               whileTap={{ scale: 0.95 }}
-               onClick={() => setShowInfo(true)}
-               className="flex items-center justify-center gap-3 w-full md:w-auto px-10 py-5 bg-amber-500 text-slate-900 border-b-4 border-amber-700 rounded-2xl transition-all duration-300 shadow-xl font-black uppercase tracking-widest text-xs"
-             >
-               <Info size={18} />
-               <span>О Кодексе</span>
-             </motion.button>
-           </div>
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-16 pb-32 space-y-12">
+        
+        {/* Header */}
+        <header className="text-center space-y-4 relative">
+          <motion.div
+            initial={{ rotate: -10, scale: 0.9 }}
+            animate={{ rotate: 0, scale: 1 }}
+            className="inline-block"
+          >
+             <div className="p-4 bg-amber-900/20 rounded-full border-2 border-amber-900/30 shadow-2xl">
+                <Scroll size={64} className="text-amber-600" />
+             </div>
+          </motion.div>
+          <h1 className="text-6xl md:text-7xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-400 to-amber-700 drop-shadow-lg">
+            Доска Поручений
+          </h1>
+          <p className="text-amber-200/40 font-black uppercase tracking-[0.4em] text-xs flex items-center justify-center gap-4">
+             <Sword size={14} /> Капитанский стол <Sword size={14} />
+          </p>
         </header>
 
         {/* 3D INTERACTIVE AREA - Styled like BayScene container */}

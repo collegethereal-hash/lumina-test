@@ -192,11 +192,16 @@ export default function PirateGamesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#2c1810] flex items-center justify-center font-sans overflow-hidden selection:bg-amber-500/30">
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-10 pointer-events-none" />
+    <div className="relative min-h-screen bg-[#020a17] text-amber-100 font-serif">
       
-      <div className="w-full h-screen bg-[#fdfaf5] flex flex-col md:flex-row overflow-hidden relative shadow-inner">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/paper-fibers.png')] opacity-40 pointer-events-none" />
+      {/* Background Decor */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-10" />
+        <div className="absolute top-0 right-0 w-full h-[600px] bg-[radial-gradient(ellipse_at_top_right,rgba(14,165,233,0.1)_0%,transparent_50%)]" />
+        <div className="absolute bottom-0 left-0 w-full h-[600px] bg-[radial-gradient(ellipse_at_bottom_left,rgba(245,158,11,0.05)_0%,transparent_50%)]" />
+      </div>
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-16 pb-32 space-y-20">
         
         {/* Mobile Navigation Header */}
         <div className="md:hidden flex items-center justify-between p-4 bg-[#f2e2ba] border-b-4 border-[#3e2723]/10 relative z-[60]">
